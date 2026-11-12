@@ -37,7 +37,7 @@ keepstack = "keepstack.cli:main"
 where = ["src"]
 
 [tool.setuptools.package-data]
-keepstack = ["Dockerfile", "compat.json"]
+keepstack = ["Dockerfile", "compat.json", "dashboard.html"]
 
 [tool.setuptools.dynamic]
 version = { attr = "keepstack.__version__" }

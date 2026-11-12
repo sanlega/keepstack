@@ -4,7 +4,7 @@ import os
 import signal
 import threading
 
-from . import __version__, check, compact, daemon, doctor, snapshot
+from . import __version__, check, compact, daemon, dashboard, doctor, snapshot
 from .proxy import DEFAULT_IMAGE, App, Server, ensure_image, log, make_handler
 
 DEFAULT_PORT = 9297
@@ -56,6 +56,8 @@ def cmd_env(args):
     if args.shell == "powershell":
         print("; ".join(f'$env:{k}="{v}"' for k, v in env.items()) + "; Remove-Item " +
               ",".join(f"Env:{k}" for k in UNSET) + " -ErrorAction SilentlyContinue")
+    elif args.shell == "dotenv":  # KEY=VALUE lines: .env files, $GITHUB_ENV
+        print("\n".join(f"{k}={v}" for k, v in env.items()))
     else:
         print("\n".join(f"export {k}={v}" for k, v in env.items()) + "\nunset " + " ".join(UNSET))
     return 0
@@ -98,7 +100,9 @@ def build_parser():
 
     env = sub.add_parser("env", help="print the variables that point the AWS CLI/SDK/Terraform at keepstack")
     env.add_argument("--port", type=int, default=DEFAULT_PORT)
-    env.add_argument("--shell", choices=("sh", "powershell"), default="powershell" if os.name == "nt" else "sh")
+    env.add_argument("--shell", choices=("sh", "powershell", "dotenv"),
+                     default="powershell" if os.name == "nt" else "sh",
+                     help="output format (dotenv: KEY=VALUE lines for .env files or $GITHUB_ENV)")
     env.set_defaults(func=cmd_env)
 
     chk = sub.add_parser("check", help="report which Terraform resources will work on the emulator, before applying")
@@ -107,6 +111,11 @@ def build_parser():
     chk.add_argument("--offline", action="store_true", help="do not fetch the emulator's known-issues list")
     chk.add_argument("--json", action="store_true", help="machine-readable output")
     chk.set_defaults(func=check.cmd_check)
+
+    ui = sub.add_parser("ui", help="open the web dashboard of a running keepstack")
+    ui.add_argument("--port", type=int, default=DEFAULT_PORT)
+    ui.add_argument("--no-browser", action="store_true", help="only print the URL")
+    ui.set_defaults(func=dashboard.cmd_ui)
 
     doc = sub.add_parser("doctor", help="check Docker, ports, AWS CLI and credentials setup")
     doc.add_argument("--port", type=int, default=DEFAULT_PORT)

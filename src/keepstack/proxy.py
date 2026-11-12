@@ -26,7 +26,7 @@ import time
 import urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-from . import shims
+from . import dashboard, shims
 
 READ_PREFIXES = ("Describe", "Get", "List", "Head", "Query", "Scan", "BatchGet", "Search",
                  "Select", "Lookup", "Check", "Validate", "Estimate", "Preview", "Simulate")
@@ -337,6 +337,8 @@ class App:
         return status, shims.on_response(self, op, status, data)
 
     def handle(self, method, path, headers, body):
+        if path.startswith(dashboard.PREFIX):  # served by keepstack itself, never forwarded or journaled
+            return dashboard.handle(self, method, path, headers)
         op = operation(path, headers, body)
         write = is_write(method, op)
         if not self.ready.wait(READY_TIMEOUT):
