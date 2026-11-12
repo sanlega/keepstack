@@ -4,7 +4,7 @@ import os
 import signal
 import threading
 
-from . import __version__, check, compact, daemon, dashboard, doctor, snapshot
+from . import __version__, check, compact, daemon, dashboard, doctor, snapshot, validate
 from .proxy import DEFAULT_IMAGE, App, Server, ensure_image, log, make_handler
 
 DEFAULT_PORT = 9297
@@ -111,6 +111,8 @@ def build_parser():
     chk.add_argument("--offline", action="store_true", help="do not fetch the emulator's known-issues list")
     chk.add_argument("--json", action="store_true", help="machine-readable output")
     chk.set_defaults(func=check.cmd_check)
+
+    validate.add_parser(sub, {"port": DEFAULT_PORT, "data_dir": DEFAULT_DATA_DIR, "image": DEFAULT_IMAGE})
 
     ui = sub.add_parser("ui", help="open the web dashboard of a running keepstack")
     ui.add_argument("--port", type=int, default=DEFAULT_PORT)

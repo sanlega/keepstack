@@ -107,6 +107,7 @@ Prueba el ciclo completo con [`examples/quickstart`](../../examples/quickstart/m
 | Comando | Qué hace |
 |---|---|
 | `keepstack check` | **Antes de aplicar:** lista qué recursos de tu proyecto Terraform funcionarán en el emulador, cuáles se sabe que fallan (con soluciones alternativas) y las carencias conocidas del emulador en cada servicio que usas. Termina con código 1 si algo va a fallar, así que encaja en CI. |
+| `keepstack validate` | **Aplica de verdad, en local:** ejecuta `init`, `plan`, `apply` y un segundo `plan` contra keepstack, y separa errores de configuración, carencias del emulador y recursos no idempotentes. No toca tus ficheros ni tu backend. Termina con código 1 si falla. |
 | `keepstack up -d` / `down` | Ejecuta en segundo plano / lo detiene. El estado se conserva en ambos casos. |
 | `keepstack status` | ¿Está en marcha? Cuántas llamadas hay guardadas, por servicio, y cómo fue la última restauración. |
 | `keepstack ui` | Abre el panel web: recursos, llamadas recientes, traducciones de IDs y snapshots. |
@@ -142,6 +143,35 @@ keepstack snapshot save before-upgrade --include terraform.tfstate
 terraform apply                                     # ...¿no ha ido bien?
 keepstack down && keepstack snapshot restore before-upgrade && keepstack up -d
 ```
+
+## Validar un proyecto Terraform
+
+`keepstack validate` responde a "¿funcionaría este apply y queda limpio?" sin cuenta de AWS. Arranca keepstack si hace
+falta, apunta Terraform a él con un fichero override temporal (tu backend y tu `.terraform` no se tocan), aplica, vuelve
+a planificar y clasifica cada problema:
+
+| | Tipo | ¿Hace fallar? |
+|---|---|---|
+| ❌ | **Error de configuración**: AWS o el provider rechazaron la petición | Sí |
+| 🔁 | **No idempotente**: el plan no sale vacío justo después del apply | Sí |
+| ⚠️ | **Carencia del emulador**: el emulador no implementa esa API (HTTP 501) o tiene un bug conocido | Solo con `--strict` |
+
+```console
+$ keepstack validate infra/
+keepstack validate: infra/  ->  PASSED (41.2 s)
+
+steps: init ok, plan ok, apply gap, idempotency skipped
+changes: 6 to add, 0 to change, 0 to replace, 0 to destroy
+
+emulator gap: aws_athena_workgroup.reports (main.tf:42)
+    ... StatusCode: 501, api error NotImplemented: operation ListTagsForResource ...
+    hint: the emulator does not implement this API yet
+```
+
+El estado de Terraform vive en el directorio de datos de keepstack, así que la siguiente ejecución parte de la
+infraestructura que dejó la anterior: el plan muestra solo lo que cambia, como un despliegue real. Los reemplazos y
+borrados se listan, y `--fail-on-destroy` los convierte en fallo. Otras opciones: `--json`, `--report FICHERO`,
+`--markdown FICHERO` (p. ej. `$GITHUB_STEP_SUMMARY`), `--destroy`, `--shims`, `--terraform tofu`.
 
 ## Panel
 
@@ -186,6 +216,7 @@ La action necesita un runner Linux (Docker con contenedores Linux). Salida: `end
 | 🔁 **Sobrevive a todo** | Ctrl+C, `docker kill`, reinicios de Docker, reinicios del equipo. Si el contenedor muere, keepstack lo restaura por su cuenta. |
 | 🪪 **IDs estables** | `vpc-…`, UUID de KMS, ARN de Secrets Manager, IDs de zona de Route 53… conservan su valor original tras los reinicios. |
 | 🔍 **Sabes antes de aplicar** | `keepstack check` te dice qué fallará en el emulador antes de ejecutar Terraform. |
+| 🧪 **Valida pull requests** | `keepstack validate` aplica tu Terraform en local y distingue errores de configuración, carencias del emulador y recursos no idempotentes. |
 | 📸 **Snapshots** | Guarda, restaura y comparte entornos completos, estado de Terraform incluido. |
 | 🩹 **Shims de compatibilidad** | `--shims` esquiva errores conocidos del emulador (p. ej. `aws_security_group`), desactivado por defecto. |
 | ⚡ **Cero configuración** | Un solo comando, sin config. La imagen del emulador se construye sola (x86_64 y Apple silicon). |

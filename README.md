@@ -105,6 +105,7 @@ Try the full loop with [`examples/quickstart`](examples/quickstart/main.tf).
 | Command | What it does |
 |---|---|
 | `keepstack check` | **Before applying:** lists which resources in your Terraform project will work on the emulator, which are known to break (with workarounds) and the emulator's known gaps for each service you use. Exits 1 if something will fail, so it fits in CI. |
+| `keepstack validate` | **Apply for real, locally:** runs `init`, `plan`, `apply` and a second `plan` against keepstack, then reports config errors, emulator gaps and resources that are not idempotent. Your files and backend are not touched. Exits 1 on failure. |
 | `keepstack up -d` / `down` | Run in the background / stop it. The state is kept either way. |
 | `keepstack status` | Is it running? How many calls are saved, per service, and how did the last restore go. |
 | `keepstack ui` | Open the web dashboard: resources, recent calls, ID translations and snapshots. |
@@ -140,6 +141,35 @@ keepstack snapshot save before-upgrade --include terraform.tfstate
 terraform apply                                     # ...didn't go well?
 keepstack down && keepstack snapshot restore before-upgrade && keepstack up -d
 ```
+
+## Validate a Terraform project
+
+`keepstack validate` answers "would this apply work, and is it clean?" without an AWS account. It starts keepstack if
+needed, points Terraform at it with a temporary override file (your backend and `.terraform` stay untouched), applies,
+plans again and classifies every problem:
+
+| | Kind | Fails the run? |
+|---|---|---|
+| ❌ | **Config error**: AWS rejected the request, or the provider did | Yes |
+| 🔁 | **Not idempotent**: the plan is not empty right after the apply | Yes |
+| ⚠️ | **Emulator gap**: the emulator does not implement that API (HTTP 501) or has a known bug | Only with `--strict` |
+
+```console
+$ keepstack validate infra/
+keepstack validate: infra/  ->  PASSED (41.2 s)
+
+steps: init ok, plan ok, apply gap, idempotency skipped
+changes: 6 to add, 0 to change, 0 to replace, 0 to destroy
+
+emulator gap: aws_athena_workgroup.reports (main.tf:42)
+    ... StatusCode: 501, api error NotImplemented: operation ListTagsForResource ...
+    hint: the emulator does not implement this API yet
+```
+
+The Terraform state lives in the keepstack data directory, so the next run starts from the infrastructure the previous
+one left: the plan shows only what changed, like a real deployment. Replacements and destroys are listed, and
+`--fail-on-destroy` turns them into a failure. Other options: `--json`, `--report FILE`, `--markdown FILE` (e.g.
+`$GITHUB_STEP_SUMMARY`), `--destroy`, `--shims`, `--terraform tofu`.
 
 ## Dashboard
 
@@ -184,6 +214,7 @@ The action needs a Linux runner (Docker with Linux containers). Output: `endpoin
 | 🔁 **Survives everything** | Ctrl+C, `docker kill`, Docker restarts, reboots. If the container dies, keepstack restores it on its own. |
 | 🪪 **Stable IDs** | `vpc-…`, KMS UUIDs, Secrets Manager ARNs, Route 53 zone IDs… keep their original values across restarts. |
 | 🔍 **Know before you apply** | `keepstack check` tells you what will break on the emulator before you run Terraform. |
+| 🧪 **Validate pull requests** | `keepstack validate` applies your Terraform locally and tells config errors apart from emulator gaps and non-idempotent resources. |
 | 📸 **Snapshots** | Save, restore and share whole environments, Terraform state included. |
 | 🩹 **Compatibility shims** | `--shims` works around known emulator bugs (e.g. `aws_security_group`), off by default. |
 | ⚡ **Zero setup** | One command, no config. The emulator image builds itself (x86_64 and Apple silicon). |
