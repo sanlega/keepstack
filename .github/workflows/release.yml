@@ -31,7 +31,7 @@ jobs:
         run: |
           pip install dist/*.whl
           keepstack --version
-          python -c "import importlib.resources as r; assert r.files('keepstack').joinpath('Dockerfile').is_file()"
+          python -c "import importlib.resources as r; k = r.files('keepstack'); assert all(k.joinpath(f).is_file() for f in ('Dockerfile', 'compat.json', 'fidelity.json', 'dashboard.html'))"
       - uses: actions/upload-artifact@v4
         with:
           name: dist

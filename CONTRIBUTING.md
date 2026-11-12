@@ -89,8 +89,9 @@ exists), **In review** (PR open), **Done** (merged).
 ## Releasing
 
 1. Move the *Unreleased* entries in `CHANGELOG.md` under a new `## [x.y.z] - YYYY-MM-DD` heading and update the links.
-2. Set `__version__` in `src/keepstack/__init__.py` to the same version and merge to `main`.
-3. Tag and push: `git tag vX.Y.Z && git push origin vX.Y.Z`.
+2. Refresh the bundled emulator fidelity data: `python scripts/update_fidelity.py`.
+3. Set `__version__` in `src/keepstack/__init__.py` to the same version and merge to `main`.
+4. Tag and push: `git tag vX.Y.Z && git push origin vX.Y.Z`.
 
 The [release workflow](.github/workflows/release.yml) checks that the tag matches the version, builds and tests the
 wheel, publishes it to PyPI through trusted publishing and creates the GitHub release with the changelog notes.

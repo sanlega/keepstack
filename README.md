@@ -104,7 +104,7 @@ Try the full loop with [`examples/quickstart`](examples/quickstart/main.tf).
 
 | Command | What it does |
 |---|---|
-| `keepstack check` | **Before applying:** lists which resources in your Terraform project will work on the emulator, which are known to break (with workarounds) and the emulator's known gaps for each service you use. Exits 1 if something will fail, so it fits in CI. |
+| `keepstack check` | **Before applying:** lists which resources in your Terraform project will work on the emulator, which are known to break (with workarounds) and the emulator's known gaps and its official fidelity score for each service you use. Exits 1 if something will fail, so it fits in CI. |
 | `keepstack validate` | **Apply for real, locally:** runs `init`, `plan`, `apply` and a second `plan` against keepstack, then reports config errors, emulator gaps and resources that are not idempotent. Your files and backend are not touched. Exits 1 on failure. |
 | `keepstack up -d` / `down` | Run in the background / stop it. The state is kept either way. |
 | `keepstack status` | Is it running? How many calls are saved, per service, and how did the last restore go. |
@@ -129,6 +129,12 @@ keepstack check: examples/quickstart (scanned .tf files), emulator 1.0.322
     aws_route53_zone            x1  zone ID translated by keepstack
     aws_subnet                  x2
     aws_vpc                     x1
+    ...
+
+Emulator fidelity for the services you use (official AWS tests, emulator 1.0.338, latest release):
+    ec2              44%  (770/1731 tests)
+    dynamodb         71%  (1053/1481 tests)
+    sqs              89%  (299/335 tests)
     ...
 
 14 resources: 13 ok, 1 with caveats, 0 broken, 0 untested.

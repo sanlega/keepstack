@@ -106,7 +106,7 @@ Prueba el ciclo completo con [`examples/quickstart`](../../examples/quickstart/m
 
 | Comando | Qué hace |
 |---|---|
-| `keepstack check` | **Antes de aplicar:** lista qué recursos de tu proyecto Terraform funcionarán en el emulador, cuáles se sabe que fallan (con soluciones alternativas) y las carencias conocidas del emulador en cada servicio que usas. Termina con código 1 si algo va a fallar, así que encaja en CI. |
+| `keepstack check` | **Antes de aplicar:** lista qué recursos de tu proyecto Terraform funcionarán en el emulador, cuáles se sabe que fallan (con soluciones alternativas) y las carencias conocidas del emulador y su puntuación oficial de fidelidad en cada servicio que usas. Termina con código 1 si algo va a fallar, así que encaja en CI. |
 | `keepstack validate` | **Aplica de verdad, en local:** ejecuta `init`, `plan`, `apply` y un segundo `plan` contra keepstack, y separa errores de configuración, carencias del emulador y recursos no idempotentes. No toca tus ficheros ni tu backend. Termina con código 1 si falla. |
 | `keepstack up -d` / `down` | Ejecuta en segundo plano / lo detiene. El estado se conserva en ambos casos. |
 | `keepstack status` | ¿Está en marcha? Cuántas llamadas hay guardadas, por servicio, y cómo fue la última restauración. |
@@ -131,6 +131,12 @@ keepstack check: examples/quickstart (scanned .tf files), emulator 1.0.322
     aws_route53_zone            x1  zone ID translated by keepstack
     aws_subnet                  x2
     aws_vpc                     x1
+    ...
+
+Emulator fidelity for the services you use (official AWS tests, emulator 1.0.338, latest release):
+    ec2              44%  (770/1731 tests)
+    dynamodb         71%  (1053/1481 tests)
+    sqs              89%  (299/335 tests)
     ...
 
 14 resources: 13 ok, 1 with caveats, 0 broken, 0 untested.

@@ -106,7 +106,7 @@ aws sts get-caller-identity    # "Account": "000000000000" → 说明你连上�
 
 | 命令 | 作用 |
 |---|---|
-| `keepstack check` | **应用之前：** 列出你的 Terraform 项目中哪些资源能在模拟器上正常工作、哪些已知会出问题（附变通方法），以及你所用每个服务在模拟器上的已知缺陷。若有会失败的项则以退出码 1 结束，因此适合放进 CI。 |
+| `keepstack check` | **应用之前：** 列出你的 Terraform 项目中哪些资源能在模拟器上正常工作、哪些已知会出问题（附变通方法），以及你所用每个服务在模拟器上的已知缺陷和官方保真度得分。若有会失败的项则以退出码 1 结束，因此适合放进 CI。 |
 | `keepstack validate` | **在本地真正执行 apply：** 针对 keepstack 运行 `init`、`plan`、`apply` 和第二次 `plan`，并区分配置错误、模拟器缺陷和非幂等资源。不会改动你的文件或后端。失败时以退出码 1 结束。 |
 | `keepstack up -d` / `down` | 在后台运行 / 停止。两种方式下状态都会保留。 |
 | `keepstack status` | 是否在运行？按服务统计已保存多少次调用，以及上次恢复的情况如何。 |
@@ -131,6 +131,12 @@ keepstack check: examples/quickstart (scanned .tf files), emulator 1.0.322
     aws_route53_zone            x1  zone ID translated by keepstack
     aws_subnet                  x2
     aws_vpc                     x1
+    ...
+
+Emulator fidelity for the services you use (official AWS tests, emulator 1.0.338, latest release):
+    ec2              44%  (770/1731 tests)
+    dynamodb         71%  (1053/1481 tests)
+    sqs              89%  (299/335 tests)
     ...
 
 14 resources: 13 ok, 1 with caveats, 0 broken, 0 untested.
