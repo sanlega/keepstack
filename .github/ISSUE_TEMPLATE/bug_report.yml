@@ -1,0 +1,36 @@
+name: Bug report
+description: keepstack does something wrong (state lost, wrong ID, crash...)
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What did you do, what did you expect, and what happened instead?
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      description: Ideally a minimal Terraform config or AWS CLI commands.
+      placeholder: |
+        1. keepstack up --reset
+        2. terraform apply ...
+        3. Ctrl+C, keepstack up
+        4. terraform plan shows ...
+    validations:
+      required: true
+  - type: textarea
+    id: log
+    attributes:
+      label: keepstack log
+      description: Especially the `state restored:` line and any `REPLAY FAILED` lines. Remove secrets.
+      render: text
+  - type: input
+    id: versions
+    attributes:
+      label: Versions
+      description: Output of `keepstack --version`, `terraform version` and your OS.
+    validations:
+      required: true

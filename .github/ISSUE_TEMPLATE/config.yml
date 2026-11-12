@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Bug in AWS Emulator itself (reproduces without keepstack)
+    url: https://github.com/aws/aws-emulator/issues
+    about: If the problem also happens when you call the emulator directly, please report it to AWS.
+  - name: Security vulnerability
+    url: https://github.com/sanlega/keepstack/security/advisories/new
+    about: Report vulnerabilities privately, not in public issues.
