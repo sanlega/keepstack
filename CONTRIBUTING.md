@@ -5,7 +5,7 @@ that runs real Terraform against a real emulator. Please keep changes in that sp
 
 ## Development setup
 
-Requirements: Python 3.9+, Docker and Terraform 1.5+.
+Requirements: Python 3.10+, Docker and Terraform 1.5+.
 
 ```sh
 git clone https://github.com/sanlega/keepstack && cd keepstack
