@@ -93,6 +93,8 @@ runs:
         path: |
           ${{ inputs.data-dir }}/*
           !${{ inputs.data-dir }}/cache
+          !${{ inputs.data-dir }}/run.json
+          !${{ inputs.data-dir }}/keepstack.log
         key: ${{ inputs.cache-key }}-baseline-${{ github.run_id }}-${{ github.run_attempt }}
         restore-keys: ${{ inputs.cache-key }}-baseline-
 
@@ -190,6 +192,8 @@ runs:
         path: |
           ${{ inputs.data-dir }}/*
           !${{ inputs.data-dir }}/cache
+          !${{ inputs.data-dir }}/run.json
+          !${{ inputs.data-dir }}/keepstack.log
         key: ${{ inputs.cache-key }}-baseline-${{ github.run_id }}-${{ github.run_attempt }}
 
     - name: Fail if the validation failed

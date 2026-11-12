@@ -65,6 +65,12 @@ def port_open(port):
         return False
 
 
+def is_running(run):
+    """The pid in run.json is alive AND its port accepts connections. A run file copied to another machine or boot
+    (restored cache, copied data dir) can name a live but unrelated process; keepstack binds its port first."""
+    return bool(run) and pid_alive(run.get("pid")) and port_open(run.get("port") or 0)
+
+
 def write_run_state(args, app):
     data_dir = os.path.abspath(args.data_dir)
     state = {"pid": os.getpid(), "port": args.port, "emulator_port": args.emulator_port,
@@ -90,7 +96,7 @@ def tail_lines(path, n=200):
 def detach(args):
     data_dir = os.path.abspath(args.data_dir)
     run = read_run(data_dir)
-    if run and pid_alive(run.get("pid")):
+    if is_running(run):
         print(f"keepstack is already running (pid {run['pid']}, port {run['port']}). Stop it with `keepstack down`.")
         return 0
     os.makedirs(data_dir, exist_ok=True)
@@ -132,7 +138,7 @@ def cmd_down(args):
         print("keepstack is not running.")
         return 0
     pid = run.get("pid")
-    was_alive = pid_alive(pid)
+    was_alive = is_running(run)  # never signal a pid that is not serving keepstack's port
     if was_alive:
         try:
             os.kill(pid, signal.SIGTERM)  # on Windows this terminates the process outright
@@ -195,8 +201,7 @@ def journal_stats(data_dir):
 def collect_status(data_dir):
     data_dir = os.path.abspath(data_dir)
     run = read_run(data_dir)
-    alive = bool(run) and pid_alive(run.get("pid"))
-    running = alive and port_open(run["port"])
+    running = alive = is_running(run)
     st = {"running": running, "data_dir": data_dir, "journal": journal_stats(data_dir)}
     if run:
         st.update(pid=run.get("pid"), port=run.get("port"), emulator_port=run.get("emulator_port"),

@@ -187,7 +187,7 @@ def running_keepstack(args):
     """Use the keepstack serving this data dir, or start one and stop it afterwards. Yields the port."""
     data_dir = os.path.abspath(args.data_dir)
     run = daemon.read_run(data_dir)
-    if run and daemon.pid_alive(run.get("pid")) and daemon.port_open(run["port"]):
+    if daemon.is_running(run):
         yield run["port"]
         return
     up = argparse.Namespace(port=args.port, emulator_port=args.port + 1, image=args.image, data_dir=data_dir,
