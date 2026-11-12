@@ -52,6 +52,39 @@ Terraform are missing. Useful variables:
 
 Unit tests only (no Docker): `PYTHONPATH=src python -m unittest tests.test_unit tests.test_check tests.test_doctor tests.test_daemon tests.test_snapshot tests.test_compact tests.test_shims tests.test_dashboard`.
 
+## Workflow
+
+Work is planned in the open on the [roadmap board](https://github.com/users/sanlega/projects/3) and in
+[milestones](https://github.com/sanlega/keepstack/milestones).
+
+```mermaid
+flowchart LR
+  I[Issue] --> B[Branch] --> PR[Pull request] --> CI{CI green?} -->|yes| M[Squash merge to main] --> R[Release tag]
+  CI -->|no| B
+```
+
+1. **Issue first.** Every change starts from an issue with a `type:` label, an `area:` label and a priority.
+   Larger features are grouped under an `epic` issue with sub-issues; spikes are time-boxed investigations.
+2. **Branch** from `main` as `<type>/<issue>-<short-slug>`, for example `feat/9-validate-command`,
+   `fix/21-replay-timeout`, `docs/30-cdk-guide`, `chore/7-project-workflow`.
+3. **Commits** follow [Conventional Commits](https://www.conventionalcommits.org/): `feat(validate): ...`,
+   `fix(proxy): ...`, `docs: ...`, `test: ...`, `ci: ...`, `chore: ...`.
+4. **Pull request** titled like a commit and starting with `Closes #<issue>`. `main` is protected: it only accepts
+   pull requests, and lint, unit tests (Linux, macOS, Windows), end-to-end tests and the Action workflow must pass.
+5. **Squash merge**, so `main` keeps one commit per pull request; the branch is deleted on merge.
+
+Board columns: **Backlog** (accepted, not scheduled), **Ready** (in a milestone), **In progress** (a branch
+exists), **In review** (PR open), **Done** (merged).
+
+| Label | Meaning |
+|---|---|
+| `type: feature` / `bug` / `docs` / `chore` / `spike` | Kind of work |
+| `area: proxy` / `cli` / `validate` / `check` / `action` / `dashboard` | Part of the code base |
+| `priority: high` / `medium` / `low` | Order within a milestone |
+| `epic` | Groups sub-issues |
+| `discussion` | Needs a decision before work starts |
+| `backlog` | Accepted, not scheduled for a release |
+
 ## Releasing
 
 1. Move the *Unreleased* entries in `CHANGELOG.md` under a new `## [x.y.z] - YYYY-MM-DD` heading and update the links.

@@ -1,6 +1,6 @@
 name: Resource incompatibility
 description: A Terraform resource or AWS API call does not work, or does not survive a restart
-labels: [compatibility]
+labels: ["type: bug", "area: check"]
 body:
   - type: input
     id: resource

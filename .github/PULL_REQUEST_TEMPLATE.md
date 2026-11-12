@@ -1,13 +1,16 @@
+Closes #<!-- issue number: every PR starts from an issue -->
+
 ## What and why
 
-<!-- What does this change and what problem does it solve? Link the issue if there is one. -->
+<!-- What does this change and what problem does it solve? -->
 
 ## How it was tested
 
-<!-- e.g. new unit test, scripts/verify output, compatibility group re-run -->
+<!-- New unit/e2e tests, scripts/verify output, manual steps a reviewer can repeat -->
 
 ## Checklist
 
+- [ ] Branch named `<type>/<issue>-<slug>` and title in Conventional Commits form (`feat(validate): ...`)
 - [ ] Tests added or updated, and `scripts/verify` passes locally
 - [ ] No new runtime dependencies
 - [ ] `CHANGELOG.md` updated under *Unreleased*
