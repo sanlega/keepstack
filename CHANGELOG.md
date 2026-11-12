@@ -5,16 +5,10 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
-### Changed
-- Docs: CloudFormation and CDK stacks persist across restarts; generated physical names do not (documented limitation,
-  [#19](https://github.com/sanlega/keepstack/issues/19)).
+## [0.3.0] - 2026-11-13
 
-### Added
-- pre-commit hook `keepstack-check` (`.pre-commit-hooks.yaml`): runs `keepstack check --offline` when `.tf` files
-  change. No Docker or network needed.
-- `keepstack check` shows the official fidelity score of every service you use (passed / total of the AWS Emulator
-  fidelity tests), from the newest emulator release when online (downloaded once per release and cached) or from a
-  bundled copy with `--offline`. `scripts/update_fidelity.py` refreshes the bundled copy.
+keepstack becomes a pull-request validator for Terraform: apply every change on the official AWS Emulator, on top of
+the environment of your default branch, with no AWS account.
 
 ### Added
 - `keepstack validate [PATH]`: applies a Terraform directory on keepstack (init, plan, apply, plan again) and reports
@@ -26,15 +20,21 @@ All notable changes to this project are documented here. The format follows
   output as `TF_OUTPUT_<name>`; a failing command fails the validation.
 - Inside GitHub Actions, `keepstack validate` prints every finding and destructive change as an inline annotation on
   the `.tf` line.
-
 - GitHub Action validator mode: `validate: <dir>` runs `keepstack validate`, writes the report to the job summary and
   to a single pull request comment that is updated on every run (`comment`), installs Terraform when missing, and
   exposes `result`, `report` and `baseline-restored` outputs. Also `run`, `strict` and `fail-on-destroy` inputs.
 - `baseline: true`: pushes to the default branch save the validated environment (journal and Terraform state); pull
   requests restore it and are validated on top of it, so the report shows the incremental plan.
+- `keepstack check` shows the official fidelity score of every service you use (passed / total of the AWS Emulator
+  fidelity tests), from the newest emulator release when online (downloaded once per release and cached) or from a
+  bundled copy with `--offline`. `scripts/update_fidelity.py` refreshes the bundled copy.
+- pre-commit hook `keepstack-check` (`.pre-commit-hooks.yaml`): runs `keepstack check --offline` when `.tf` files
+  change. No Docker or network needed.
 
 ### Changed
 - `keepstack up --reset` also deletes the Terraform state kept by `keepstack validate`.
+- Docs: CloudFormation and CDK stacks persist across restarts; generated physical names do not (documented limitation,
+  [#19](https://github.com/sanlega/keepstack/issues/19)).
 
 ### Fixed
 - Secrets Manager ARNs whose random suffix came out in a single case (`demo-db-password-SGAEFE`) were not translated
@@ -85,6 +85,7 @@ All notable changes to this project are documented here. The format follows
 - Automatic build of the emulator image (x86_64 and arm64).
 - Compatibility matrix covering 40+ Terraform resource types.
 
-[Unreleased]: https://github.com/sanlega/keepstack/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/sanlega/keepstack/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/sanlega/keepstack/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/sanlega/keepstack/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/sanlega/keepstack/releases/tag/v0.1.0
