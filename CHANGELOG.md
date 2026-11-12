@@ -11,7 +11,6 @@ All notable changes to this project are documented here. The format follows
   file and line. Uses a temporary override file and a local backend inside the data dir, so the user's files and
   backend are untouched and the next run starts from the previous infrastructure. Lists replacements and destroys
   (`--fail-on-destroy`), and writes `--json`, `--report` and `--markdown` reports. Works with OpenTofu (`--terraform`).
-
 - `keepstack validate --run CMD` (repeatable): smoke tests after the apply, with the AWS variables and every Terraform
   output as `TF_OUTPUT_<name>`; a failing command fails the validation.
 - Inside GitHub Actions, `keepstack validate` prints every finding and destructive change as an inline annotation on
@@ -25,6 +24,11 @@ All notable changes to this project are documented here. The format follows
 
 ### Changed
 - `keepstack up --reset` also deletes the Terraform state kept by `keepstack validate`.
+
+### Fixed
+- Secrets Manager ARNs whose random suffix came out in a single case (`demo-db-password-SGAEFE`) were not translated
+  after a restart, so Terraform saw the secret as deleted. With emulator 1.0.337 it happened in 2 of 3 CI runs
+  (`SGAEFE`, `ctksym`).
 
 ## [0.2.0] - 2026-11-12
 
