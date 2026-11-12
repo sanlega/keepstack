@@ -188,31 +188,69 @@ de IDs y tus snapshots. Solo responde en `127.0.0.1`.
 
 ## En GitHub Actions
 
-Dale a cualquier workflow un AWS local con un solo paso. Tu AWS CLI, tus SDK y Terraform apuntan a él automáticamente.
+### Valida cada pull request
+
+Con un solo paso, cada pull request que toque tu infraestructura se aplica en el emulador oficial de AWS, sin cuenta de
+AWS ni tokens:
 
 ```yaml
+# .github/workflows/infra.yml
+on:
+  push:
+    branches: [main]
+  pull_request:
+
 jobs:
-  test:
+  validate:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write   # para el comentario en el PR
     steps:
       - uses: actions/checkout@v7
-      - uses: sanlega/keepstack@v0.2.0
+      - uses: sanlega/keepstack@v0.3.0
         with:
-          shims: true          # opcional: esquiva errores conocidos del emulador
+          validate: infra/            # tu directorio Terraform
+          baseline: true              # valida los PR sobre el entorno de main
+          shims: true
+          run: pytest tests/smoke     # opcional: comprueba que los recursos funcionan
+```
+
+- **Resumen del job y un comentario fijo en el PR** con el plan, los pasos y cada problema encontrado.
+- **Anotaciones en línea** sobre las líneas `.tf` que fallan.
+- **Baseline:** los push a `main` guardan el entorno resultante; los pull requests lo restauran y se aplican encima, así
+  que el informe muestra el plan incremental real (reemplazos, borrados, bloques `moved`) en vez de un apply desde cero.
+  Los demás emuladores locales empiezan con una cuenta vacía en cada ejecución.
+
+### Solo un AWS local
+
+Sin `validate`, la acción solo arranca keepstack y apunta a él la AWS CLI, los SDK y Terraform:
+
+```yaml
+      - uses: sanlega/keepstack@v0.3.0
+        with:
           cache: true          # opcional: conserva el estado entre ejecuciones
       - run: terraform init && terraform apply -auto-approve
 ```
 
-| Input | Por defecto | Descripción |
+| Entrada | Por defecto | Descripción |
 |---|---|---|
+| `validate` | | Directorio Terraform a validar. Vacío: solo arranca keepstack |
+| `baseline` | `false` | Guarda el entorno en los push a la rama principal y valida los pull requests encima |
+| `comment` | `true` | Publica el informe como un único comentario en el pull request, actualizado en cada ejecución |
+| `run` | | Comandos tras el apply, uno por línea (ver `validate --run`) |
+| `strict` | `false` | Las carencias del emulador también hacen fallar |
+| `fail-on-destroy` | `false` | Falla si el plan reemplaza o destruye recursos |
 | `shims` | `false` | Igual que `keepstack up --shims` |
-| `cache` | `false` | Restaura el estado de la ejecución anterior y lo guarda al final del job |
+| `cache` | `false` | Sin `validate`: restaura el estado de la ejecución anterior y lo guarda al final del job |
 | `cache-key` | `keepstack` | Prefijo de la clave de caché, para entornos independientes |
 | `port` | `9297` | Puerto en el que escucha keepstack |
-| `data-dir` | `.keepstack` | Directorio del estado |
-| `python-version` | `3.12` | Python usado para ejecutar keepstack |
+| `data-dir` | `.keepstack` | Directorio de estado |
+| `python-version` | `3.12` | Python con el que se ejecuta keepstack |
+| `github-token` | `github.token` | Token para el comentario del pull request |
 
-La action necesita un runner Linux (Docker con contenedores Linux). Salida: `endpoint-url`.
+Salidas: `endpoint-url`, `result` (`passed` / `failed`), `report` (ruta del informe JSON), `baseline-restored`. La
+acción necesita un runner Linux (Docker con contenedores Linux) e instala Terraform si el runner no lo tiene.
 
 ## Características
 

@@ -1,11 +1,29 @@
 name: keepstack
-description: Persistent local AWS for your workflows. Runs AWS Emulator behind keepstack and points AWS CLI, SDKs and Terraform at it.
+description: Persistent local AWS for your workflows, and a Terraform validator for pull requests. Runs the official AWS Emulator behind keepstack.
 author: keepstack contributors
 branding:
   icon: database
   color: blue
 
 inputs:
+  validate:
+    description: Terraform directory to validate with `keepstack validate`. Empty (default) only starts keepstack.
+    default: ""
+  baseline:
+    description: Keep the environment of the default branch between runs and validate pull requests on top of it.
+    default: "false"
+  comment:
+    description: In pull requests, post the validation report as a single comment that is updated on every run.
+    default: "true"
+  strict:
+    description: Emulator gaps (unimplemented APIs, known emulator bugs) fail the validation too.
+    default: "false"
+  fail-on-destroy:
+    description: Fail the validation when the plan replaces or destroys resources.
+    default: "false"
+  run:
+    description: Commands to run after the apply (one per line), e.g. smoke tests. They see the AWS variables and TF_OUTPUT_<name>.
+    default: ""
   shims:
     description: Work around known emulator bugs (keepstack up --shims).
     default: "false"
@@ -24,11 +42,23 @@ inputs:
   python-version:
     description: Python used to run keepstack.
     default: "3.12"
+  github-token:
+    description: Token used to post the pull request comment.
+    default: ${{ github.token }}
 
 outputs:
   endpoint-url:
     description: The AWS endpoint served by keepstack.
     value: ${{ steps.up.outputs.endpoint-url }}
+  result:
+    description: "`passed` or `failed` when `validate` is set."
+    value: ${{ steps.validate.outputs.result }}
+  report:
+    description: Path to the JSON validation report.
+    value: ${{ steps.validate.outputs.report }}
+  baseline-restored:
+    description: "`true` when the environment of the default branch was restored (`baseline: true`)."
+    value: ${{ steps.baseline.outputs.cache-hit == 'true' || steps.baseline.outputs.cache-matched-key != '' }}
 
 runs:
   using: composite
@@ -54,9 +84,32 @@ runs:
         key: ${{ inputs.cache-key }}-${{ github.run_id }}-${{ github.run_attempt }}
         restore-keys: ${{ inputs.cache-key }}-
 
+    - name: Restore the default-branch baseline
+      id: baseline
+      if: inputs.baseline == 'true'
+      uses: actions/cache/restore@v4
+      with:
+        path: |
+          ${{ inputs.data-dir }}
+          !${{ inputs.data-dir }}/cache
+        key: ${{ inputs.cache-key }}-baseline-${{ github.run_id }}-${{ github.run_attempt }}
+        restore-keys: ${{ inputs.cache-key }}-baseline-
+
     - name: Install keepstack
       shell: bash
       run: pip install --quiet "$GITHUB_ACTION_PATH"
+
+    - name: Look for Terraform
+      id: terraform
+      if: inputs.validate != ''
+      shell: bash
+      run: echo "found=$(command -v terraform >/dev/null && echo true || echo false)" >> "$GITHUB_OUTPUT"
+
+    - name: Install Terraform
+      if: inputs.validate != '' && steps.terraform.outputs.found == 'false'
+      uses: hashicorp/setup-terraform@v4
+      with:
+        terraform_wrapper: false  # keeps Terraform's exit codes, which validate relies on
 
     - name: Start keepstack
       id: up
@@ -71,3 +124,77 @@ runs:
         keepstack up -d "${args[@]}"
         keepstack env --port "$PORT" --shell dotenv >> "$GITHUB_ENV"
         echo "endpoint-url=http://127.0.0.1:$PORT" >> "$GITHUB_OUTPUT"
+
+    - name: Validate ${{ inputs.validate }}
+      id: validate
+      if: inputs.validate != ''
+      shell: bash
+      env:
+        VALIDATE: ${{ inputs.validate }}
+        DATA_DIR: ${{ inputs.data-dir }}
+        STRICT: ${{ inputs.strict }}
+        FAIL_ON_DESTROY: ${{ inputs.fail-on-destroy }}
+        RUN: ${{ inputs.run }}
+      run: |
+        report="$RUNNER_TEMP/keepstack-report.json"
+        summary="$RUNNER_TEMP/keepstack-report.md"
+        rm -f "$summary"
+        args=("$VALIDATE" --data-dir "$DATA_DIR" --report "$report" --markdown "$summary")
+        [ "$STRICT" = "true" ] && args+=(--strict)
+        [ "$FAIL_ON_DESTROY" = "true" ] && args+=(--fail-on-destroy)
+        while IFS= read -r cmd; do
+          [ -n "$cmd" ] && args+=(--run "$cmd")
+        done <<< "$RUN"
+        rc=0
+        keepstack validate "${args[@]}" || rc=$?
+        [ -f "$summary" ] && cat "$summary" >> "$GITHUB_STEP_SUMMARY"
+        echo "report=$report" >> "$GITHUB_OUTPUT"
+        echo "summary=$summary" >> "$GITHUB_OUTPUT"
+        case $rc in
+          0) echo "result=passed" >> "$GITHUB_OUTPUT" ;;
+          1) echo "result=failed" >> "$GITHUB_OUTPUT" ;;
+          *) echo "result=error" >> "$GITHUB_OUTPUT"; exit "$rc" ;;
+        esac
+
+    - name: Comment on the pull request
+      if: >-
+        inputs.validate != '' && inputs.comment == 'true' && steps.validate.outputs.summary != '' &&
+        (github.event_name == 'pull_request' || github.event_name == 'pull_request_target')
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.github-token }}
+        PR: ${{ github.event.pull_request.number }}
+        VALIDATE: ${{ inputs.validate }}
+        SUMMARY: ${{ steps.validate.outputs.summary }}
+      run: |
+        marker="<!-- keepstack-validate: $VALIDATE -->"
+        body="$marker"$'\n'"$(cat "$SUMMARY")"
+        id=$(gh api "repos/$GITHUB_REPOSITORY/issues/$PR/comments" --paginate \
+               --jq ".[] | select(.body | startswith(\"$marker\")) | .id" 2>/dev/null | head -n 1 || true)
+        if [ -n "$id" ]; then
+          gh api -X PATCH "repos/$GITHUB_REPOSITORY/issues/comments/$id" -f body="$body" >/dev/null && ok=1
+        else
+          gh api "repos/$GITHUB_REPOSITORY/issues/$PR/comments" -f body="$body" >/dev/null && ok=1
+        fi
+        # Pull requests from forks get a read-only token: the job summary still has the report.
+        [ -n "${ok:-}" ] || echo "::notice::keepstack could not comment on the pull request (read-only token?)"
+
+    - name: Save the baseline
+      if: >-
+        inputs.baseline == 'true' && steps.validate.outputs.result == 'passed' &&
+        github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+      uses: actions/cache/save@v4
+      with:
+        path: |
+          ${{ inputs.data-dir }}
+          !${{ inputs.data-dir }}/cache
+        key: ${{ inputs.cache-key }}-baseline-${{ github.run_id }}-${{ github.run_attempt }}
+
+    - name: Fail if the validation failed
+      if: steps.validate.outputs.result == 'failed'
+      shell: bash
+      env:
+        VALIDATE: ${{ inputs.validate }}
+      run: |
+        echo "::error::keepstack validate failed for $VALIDATE (see the job summary)"
+        exit 1
