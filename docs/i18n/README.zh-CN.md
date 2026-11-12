@@ -168,7 +168,11 @@ emulator gap: aws_athena_workgroup.reports (main.tf:42)
 ```
 
 Terraform 状态保存在 keepstack 数据目录中，因此下一次运行会从上一次留下的基础设施开始：plan 只显示变化的部分，就像真实部署一样。
-替换和销毁会被列出，`--fail-on-destroy` 会把它们视为失败。其他选项：`--json`、`--report FILE`、`--markdown FILE`
+替换和销毁会被列出，`--fail-on-destroy` 会把它们视为失败。
+
+添加 `--run "pytest tests/smoke"`（可重复）可在 apply 之后检查资源是否真的可用：命令可以读取 AWS 环境变量以及每个
+Terraform output（`TF_OUTPUT_<name>`），退出码非零则验证失败。在 GitHub Actions 中，每个问题还会作为注释显示在 `.tf`
+文件对应的行上，直接出现在拉取请求的 diff 中。其他选项：`--json`、`--report FILE`、`--markdown FILE`
 （例如 `$GITHUB_STEP_SUMMARY`）、`--destroy`、`--shims`、`--terraform tofu`。
 
 ## 仪表盘

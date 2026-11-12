@@ -4,6 +4,7 @@ import contextlib
 import json
 import os
 import shutil
+import sys
 import tempfile
 import unittest
 from unittest import mock
@@ -31,7 +32,7 @@ def planned(addr, action):
 def args(**kw):
     return argparse.Namespace(**{"path": ".", "data_dir": ".keepstack", "port": 9297, "image": "img",
                                  "shims": False, "keep_running": False, "terraform": "terraform", "timeout": 60,
-                                 "destroy": False, "strict": False, "fail_on_destroy": False, **kw})
+                                 "destroy": False, "strict": False, "fail_on_destroy": False, "run": [], **kw})
 
 
 class Classify(unittest.TestCase):
@@ -165,6 +166,24 @@ class Flow(unittest.TestCase):
         rep, calls = self.run_validate({"init": (1, "", "Error: Unsupported argument")})
         self.assertEqual(calls, ["init"])
         self.assertEqual(rep["result"], "failed")
+
+    def test_smoke_commands_get_outputs_and_failures_fail(self):
+        check = (f'"{sys.executable}" -c "import os,sys; '
+                 "sys.exit(0 if os.environ.get('TF_OUTPUT_url') == 'http://x' "
+                 "and os.environ.get('TF_OUTPUT_ports') == '[80, 443]' else 3)\"")
+        outputs = (0, json.dumps({"url": {"value": "http://x"}, "ports": {"value": [80, 443]}}), "")
+        rep, calls = self.run_validate({"output": outputs}, run=[check])
+        self.assertEqual(calls[-1], "output")
+        self.assertEqual((rep["steps"]["smoke"], rep["smoke"][0]["exit_code"], rep["result"]), ("ok", 0, "passed"))
+        rep, _ = self.run_validate({"output": outputs}, run=[check, f'"{sys.executable}" -c "print(42); exit(7)"'])
+        self.assertEqual((rep["steps"]["smoke"], rep["result"]), ("failed", "failed"))
+        self.assertEqual(rep["findings"][0]["kind"], "smoke")
+        self.assertIn("exited with 7: 42", rep["findings"][0]["message"])
+
+    def test_no_smoke_when_apply_failed(self):
+        rep, calls = self.run_validate({"apply": (1, "", "boom")}, run=["exit 0"])
+        self.assertNotIn("output", calls)
+        self.assertEqual(rep["smoke"], [])
 
 
 REPORT = {"path": "infra", "result": "failed", "duration_seconds": 1.5,
