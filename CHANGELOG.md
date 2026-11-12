@@ -5,6 +5,10 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+- Docs: CloudFormation and CDK stacks persist across restarts; generated physical names do not (documented limitation,
+  [#19](https://github.com/sanlega/keepstack/issues/19)).
+
 ### Added
 - `keepstack validate [PATH]`: applies a Terraform directory on keepstack (init, plan, apply, plan again) and reports
   config errors, emulator gaps (HTTP 501 or known bugs, warnings unless `--strict`) and non-idempotent resources, with

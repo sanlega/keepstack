@@ -335,7 +335,10 @@ Run several isolated environments side by side with different `--port`, `--emula
   Known gaps are in the [compatibility matrix](docs/compatibility.md).
 - **Heuristic ID translation:** only values that look generated are learned.
   Details in [how it works](docs/how-it-works.md#limitations).
-- **The journal only grows:** compact it with `keepstack up --reset` and a fresh `terraform apply`.
+- **The journal only grows** until you run `keepstack compact`, which drops resources that were created and
+  deleted.
+- **CloudFormation / CDK:** stacks persist, but physical names that CloudFormation generates (resources without
+  `QueueName`, `BucketName`...) change after a restart. Name the resources you rely on.
 
 </details>
 

@@ -107,4 +107,9 @@ journal (`meta['shims']`) so the recorded calls replay the same way; `--reset` f
 - **Side effects run again.** Lambda `Invoke`, SNS → SQS deliveries and anything the emulator runs internally happen
   again when the calls that caused them are replayed.
 - **In-memory bodies.** Requests and responses are buffered (no streaming). Tested with 20 MB multipart S3 uploads.
-- **The journal only grows.** Compact it with `keepstack up --reset` followed by `terraform apply`.
+- **The journal only grows** until `keepstack compact` drops the resources that were created and later deleted.
+- **CloudFormation-generated names.** Replaying `CreateStack` rebuilds every resource of the template and the stack
+  ID is translated, but physical names that CloudFormation generates (a queue without `QueueName` becomes
+  `stack-Q-C212895A2991`) only appear in read responses (`DescribeStackResources`), which are not journaled, so they
+  get new values after a restart. Give explicit names to resources you reference from outside the stack
+  ([#19](https://github.com/sanlega/keepstack/issues/19) tracks translating them).

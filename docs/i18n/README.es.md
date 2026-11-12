@@ -337,7 +337,10 @@ Puedes ejecutar varios entornos aislados en paralelo con distintos `--port`, `--
   Las carencias conocidas están en la [matriz de compatibilidad](../compatibility.md).
 - **Traducción de IDs heurística**: solo se aprenden los valores que parecen generados.
   Detalles en [cómo funciona](../how-it-works.md#limitations).
-- **El journal solo crece**: compáctalo con `keepstack up --reset` y un `terraform apply` nuevo.
+- **El journal solo crece** hasta que ejecutas `keepstack compact`, que elimina los recursos creados y luego
+  borrados.
+- **CloudFormation / CDK:** los stacks persisten, pero los nombres físicos que genera CloudFormation (recursos sin
+  `QueueName`, `BucketName`...) cambian tras un reinicio. Pon nombre a los recursos de los que dependas.
 
 </details>
 
