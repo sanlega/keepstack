@@ -83,22 +83,62 @@ pipx install git+https://github.com/sanlega/keepstack
 **2. Start it:** the emulator image is built on first run, then your saved state is restored
 
 ```sh
-keepstack up
+keepstack up -d                # in the background; or `keepstack up` to keep it in this terminal
 ```
 
-**3. Point your tools at it:** in another terminal
+**3. Point your tools at it**
 
 ```sh
 eval "$(keepstack env)"        # PowerShell: keepstack env --shell powershell | iex
 aws sts get-caller-identity    # "Account": "000000000000" → you're on the emulator
 ```
 
-That's it. Use Terraform, the AWS CLI or any SDK as usual; stop keepstack whenever you like.
+That's it. Use Terraform, the AWS CLI or any SDK as usual, and `keepstack down` whenever you like.
 Try the full loop with [`examples/quickstart`](examples/quickstart/main.tf).
 
 > [!IMPORTANT]
 > Use **AWS CLI v2**: v1 ignores `AWS_ENDPOINT_URL` for some services (e.g. SQS) and would call real AWS.
 > In Terraform, copy the `provider` block from the [quickstart example](examples/quickstart/main.tf).
+
+## Everyday commands
+
+| Command | What it does |
+|---|---|
+| `keepstack check` | **Before applying:** lists which resources in your Terraform project will work on the emulator, which are known to break (with workarounds) and the emulator's known gaps for each service you use. Exits 1 if something will fail, so it fits in CI. |
+| `keepstack up -d` / `down` | Run in the background / stop it. The state is kept either way. |
+| `keepstack status` | Is it running? How many calls are saved, per service, and how did the last restore go. |
+| `keepstack logs -f` | Follow the background log. |
+| `keepstack doctor` | Checks Docker, the port, your AWS CLI version and warns if real AWS credentials could leak into your session. |
+| `keepstack snapshot save <name>` | Save the current state (add `--include terraform.tfstate` to save your Terraform state with it). `snapshot list`, `restore`, `delete`. |
+| `keepstack export` / `import` | Share a whole environment as a single file. |
+| `keepstack compact` | Shrink the journal by dropping resources that were created and later deleted. Verified in a throwaway emulator before it is applied. |
+| `keepstack env` | Print the variables that point your tools at keepstack. |
+
+```console
+$ keepstack check examples/quickstart
+keepstack check: examples/quickstart (scanned .tf files), emulator 1.0.322
+
+⚠ works with a caveat
+    aws_dynamodb_table          x1  PAY_PER_REQUEST shows a perpetual diff (OnDemandThroughput returns -1)
+                                workaround: keepstack up --shims, or lifecycle { ignore_changes = [on_demand_throughput] }
+
+✓ ok
+    aws_kms_key                 x1  key UUID translated by keepstack
+    aws_route53_zone            x1  zone ID translated by keepstack
+    aws_subnet                  x2
+    aws_vpc                     x1
+    ...
+
+14 resources: 13 ok, 1 with caveats, 0 broken, 0 untested.
+```
+
+Snapshots make risky changes cheap to try:
+
+```sh
+keepstack snapshot save before-upgrade --include terraform.tfstate
+terraform apply                                     # ...didn't go well?
+keepstack down && keepstack snapshot restore before-upgrade && keepstack up -d
+```
 
 ## Features
 
@@ -106,6 +146,9 @@ Try the full loop with [`examples/quickstart`](examples/quickstart/main.tf).
 |---|---|
 | 🔁 **Survives everything** | Ctrl+C, `docker kill`, Docker restarts, reboots. If the container dies, keepstack restores it on its own. |
 | 🪪 **Stable IDs** | `vpc-…`, KMS UUIDs, Secrets Manager ARNs, Route 53 zone IDs… keep their original values across restarts. |
+| 🔍 **Know before you apply** | `keepstack check` tells you what will break on the emulator before you run Terraform. |
+| 📸 **Snapshots** | Save, restore and share whole environments, Terraform state included. |
+| 🩹 **Compatibility shims** | `--shims` works around known emulator bugs (e.g. `aws_security_group`), off by default. |
 | ⚡ **Zero setup** | One command, no config. The emulator image builds itself (x86_64 and Apple silicon). |
 | 🛡️ **Safe by design** | Write-ahead journal, one instance per port: a stray `--reset` can't wipe a running state. |
 | 📦 **Zero dependencies** | Pure Python standard library. macOS, Linux and Windows. |
@@ -135,11 +178,24 @@ The full design is in [docs/how-it-works.md](docs/how-it-works.md).
 <br>
 
 ```text
-keepstack up    [--port 9297] [--emulator-port 9298] [--data-dir .keepstack]
-                [--image keepstack-emulator] [--reset] [--verbose]
-keepstack env   [--port 9297] [--shell sh|powershell]
+keepstack up        [-d] [--port 9297] [--emulator-port 9298] [--data-dir .keepstack]
+                    [--image keepstack-emulator] [--reset] [--shims] [--verbose]
+keepstack down      [--data-dir]
+keepstack status    [--data-dir] [--json]
+keepstack logs      [--data-dir] [-f]
+keepstack env       [--port 9297] [--shell sh|powershell]
+keepstack check     [PATH] [--plan plan.json] [--offline] [--json]
+keepstack doctor    [--port] [--data-dir]
+keepstack snapshot  save NAME [--include FILE ...] [--force] | list | restore NAME | delete NAME
+keepstack export    FILE
+keepstack import    FILE
+keepstack compact   [--dry-run]
 keepstack --version
 ```
+
+Every command that works on a state accepts `--data-dir` (default `.keepstack`). `restore`, `import` and
+`compact` need keepstack to be stopped and save the previous state as the `pre-restore` / `pre-compact` snapshot
+first, so they can always be undone.
 
 | Option | Default | Description |
 |---|---|---|
@@ -148,6 +204,8 @@ keepstack --version
 | `--data-dir` | `.keepstack` | Where the journal is stored |
 | `--image` | `keepstack-emulator` | Emulator image; built automatically if it's the default and missing |
 | `--reset` | | Clear the saved state and start from scratch |
+| `-d`, `--detach` | | Run in the background; logs go to `.keepstack/keepstack.log` |
+| `--shims` | | Work around known emulator bugs (see [how it works](docs/how-it-works.md#compatibility-shims)); remembered for that state |
 | `--verbose` | | Log every request |
 
 Run several isolated environments side by side with different `--port`, `--emulator-port` and `--data-dir`.

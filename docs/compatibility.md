@@ -19,9 +19,9 @@ the emulator container → `keepstack up` (no `--reset`) → `terraform plan` (n
 | `ssm_parameter`, `secretsmanager_secret`, `secretsmanager_secret_version`, `ecr_repository` | ✅ | ✅ | ✅ | OK (secret ARN suffix translated) |
 | `cloudwatch_event_rule`, `cloudwatch_event_target` | ✅ | ✅ | ✅ | OK |
 | `route53_zone`, `route53_record` | ✅ | ✅ | ✅ | OK (zone ID translated) |
-| `security_group` (and `vpc_security_group_*_rule` that depend on it) | ❌ | n/a | n/a | **Emulator bug**, see below |
+| `security_group` (and `vpc_security_group_*_rule` that depend on it) | ❌ | n/a | n/a | **Emulator bug**, see below. ✅ with `keepstack up --shims` |
 | `s3_bucket_policy` with `Principal = "*"` | ❌ | n/a | n/a | Emulator enforces `BlockPublicPolicy` (likely the same as AWS defaults) |
-| `dynamodb_table` with `PAY_PER_REQUEST` | ✅ | ⚠️ | n/a | **Emulator bug**, see below |
+| `dynamodb_table` with `PAY_PER_REQUEST` | ✅ | ⚠️ | n/a | **Emulator bug**, see below. ✅ with `keepstack up --shims` |
 
 Not covered yet: actually invoking Lambda functions or running event source mappings, ECS, RDS, ElastiCache,
 CloudFront, Step Functions. Contributions welcome.
@@ -32,10 +32,13 @@ These reproduce **directly against AWS Emulator, without keepstack**:
 
 - **`aws_security_group` cannot be created.** Terraform revokes the default egress rule with
   `IpProtocol=-1, FromPort=0, ToPort=0`. AWS ignores ports for protocol `-1`; the emulator requires them to match and
-  answers `InvalidPermission.NotFound`.
+  answers `InvalidPermission.NotFound`. Workaround: `keepstack up --shims`.
 - **On-demand DynamoDB tables show a perpetual diff.** The emulator returns `-1` for
   `OnDemandThroughput.MaxRead/WriteRequestUnits`, so every plan shows `max_read_request_units = -1 -> null`.
-  Workaround: `lifecycle { ignore_changes = [on_demand_throughput] }`.
+  Workaround: `keepstack up --shims`, or `lifecycle { ignore_changes = [on_demand_throughput] }`.
+
+Both are covered by `keepstack up --shims` (verified end to end: create, idempotent plan, restart, destroy).
+`keepstack check` reads this matrix from [`src/keepstack/compat.json`](../src/keepstack/compat.json): update both together.
 
 ## Running a group yourself
 

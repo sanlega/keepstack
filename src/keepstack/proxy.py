@@ -234,6 +234,7 @@ class App:
     def reset(self):
         with self.db() as db:
             db.execute("delete from journal")
+            db.execute("delete from meta")  # also forget settings such as remembered shims
         log("journal cleared (--reset)")
 
     # --- emulator -----------------------------------------------------------
@@ -258,6 +259,7 @@ class App:
         """Starts a clean emulator and replays the journal. Blocks traffic meanwhile."""
         self.ready.clear()
         with self.lock:
+            shims.enabled(self)  # decide (and log) before replaying, which may need them
             self.start_emulator()
             self.ids = IdMap()
             ok = fail = 0

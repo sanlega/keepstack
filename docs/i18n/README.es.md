@@ -85,22 +85,62 @@ pipx install git+https://github.com/sanlega/keepstack
 **2. Arráncalo:** la imagen del emulador se construye la primera vez y después se restaura tu estado guardado
 
 ```sh
-keepstack up
+keepstack up -d                # en segundo plano; o `keepstack up` para mantenerlo en esta terminal
 ```
 
-**3. Apunta tus herramientas a keepstack:** en otra terminal
+**3. Apunta tus herramientas a keepstack**
 
 ```sh
 eval "$(keepstack env)"        # PowerShell: keepstack env --shell powershell | iex
 aws sts get-caller-identity    # "Account": "000000000000" → estás en el emulador
 ```
 
-Eso es todo. Usa Terraform, la AWS CLI o cualquier SDK como siempre; para keepstack cuando quieras.
+Eso es todo. Usa Terraform, la AWS CLI o cualquier SDK como siempre, y `keepstack down` cuando quieras.
 Prueba el ciclo completo con [`examples/quickstart`](../../examples/quickstart/main.tf).
 
 > [!IMPORTANT]
 > Usa **AWS CLI v2**: la v1 ignora `AWS_ENDPOINT_URL` en algunos servicios (p. ej. SQS) y llamaría a AWS de verdad.
 > En Terraform, copia el bloque `provider` del [ejemplo quickstart](../../examples/quickstart/main.tf).
+
+## Comandos del día a día
+
+| Comando | Qué hace |
+|---|---|
+| `keepstack check` | **Antes de aplicar:** lista qué recursos de tu proyecto Terraform funcionarán en el emulador, cuáles se sabe que fallan (con soluciones alternativas) y las carencias conocidas del emulador en cada servicio que usas. Termina con código 1 si algo va a fallar, así que encaja en CI. |
+| `keepstack up -d` / `down` | Ejecuta en segundo plano / lo detiene. El estado se conserva en ambos casos. |
+| `keepstack status` | ¿Está en marcha? Cuántas llamadas hay guardadas, por servicio, y cómo fue la última restauración. |
+| `keepstack logs -f` | Sigue el registro en segundo plano. |
+| `keepstack doctor` | Comprueba Docker, el puerto, la versión de tu AWS CLI y avisa si unas credenciales reales de AWS podrían filtrarse a tu sesión. |
+| `keepstack snapshot save <name>` | Guarda el estado actual (añade `--include terraform.tfstate` para guardar contigo tu estado de Terraform). También `snapshot list`, `restore`, `delete`. |
+| `keepstack export` / `import` | Comparte un entorno completo como un único archivo. |
+| `keepstack compact` | Reduce el journal eliminando los recursos que se crearon y luego se borraron. Se verifica en un emulador desechable antes de aplicarlo. |
+| `keepstack env` | Imprime las variables que apuntan tus herramientas a keepstack. |
+
+```console
+$ keepstack check examples/quickstart
+keepstack check: examples/quickstart (scanned .tf files), emulator 1.0.322
+
+⚠ works with a caveat
+    aws_dynamodb_table          x1  PAY_PER_REQUEST shows a perpetual diff (OnDemandThroughput returns -1)
+                                workaround: keepstack up --shims, or lifecycle { ignore_changes = [on_demand_throughput] }
+
+✓ ok
+    aws_kms_key                 x1  key UUID translated by keepstack
+    aws_route53_zone            x1  zone ID translated by keepstack
+    aws_subnet                  x2
+    aws_vpc                     x1
+    ...
+
+14 resources: 13 ok, 1 with caveats, 0 broken, 0 untested.
+```
+
+Los snapshots hacen barato probar cambios arriesgados:
+
+```sh
+keepstack snapshot save before-upgrade --include terraform.tfstate
+terraform apply                                     # ...¿no ha ido bien?
+keepstack down && keepstack snapshot restore before-upgrade && keepstack up -d
+```
 
 ## Características
 
@@ -108,6 +148,9 @@ Prueba el ciclo completo con [`examples/quickstart`](../../examples/quickstart/m
 |---|---|
 | 🔁 **Sobrevive a todo** | Ctrl+C, `docker kill`, reinicios de Docker, reinicios del equipo. Si el contenedor muere, keepstack lo restaura por su cuenta. |
 | 🪪 **IDs estables** | `vpc-…`, UUID de KMS, ARN de Secrets Manager, IDs de zona de Route 53… conservan su valor original tras los reinicios. |
+| 🔍 **Sabes antes de aplicar** | `keepstack check` te dice qué fallará en el emulador antes de ejecutar Terraform. |
+| 📸 **Snapshots** | Guarda, restaura y comparte entornos completos, estado de Terraform incluido. |
+| 🩹 **Shims de compatibilidad** | `--shims` esquiva errores conocidos del emulador (p. ej. `aws_security_group`), desactivado por defecto. |
 | ⚡ **Cero configuración** | Un solo comando, sin config. La imagen del emulador se construye sola (x86_64 y Apple silicon). |
 | 🛡️ **Seguro por diseño** | Journal con escritura previa y una instancia por puerto: un `--reset` accidental no puede borrar un estado en ejecución. |
 | 📦 **Sin dependencias** | Solo la biblioteca estándar de Python. macOS, Linux y Windows. |
@@ -137,11 +180,24 @@ El diseño completo está en [docs/how-it-works.md](../how-it-works.md).
 <br>
 
 ```text
-keepstack up    [--port 9297] [--emulator-port 9298] [--data-dir .keepstack]
-                [--image keepstack-emulator] [--reset] [--verbose]
-keepstack env   [--port 9297] [--shell sh|powershell]
+keepstack up        [-d] [--port 9297] [--emulator-port 9298] [--data-dir .keepstack]
+                    [--image keepstack-emulator] [--reset] [--shims] [--verbose]
+keepstack down      [--data-dir]
+keepstack status    [--data-dir] [--json]
+keepstack logs      [--data-dir] [-f]
+keepstack env       [--port 9297] [--shell sh|powershell]
+keepstack check     [PATH] [--plan plan.json] [--offline] [--json]
+keepstack doctor    [--port] [--data-dir]
+keepstack snapshot  save NAME [--include FILE ...] [--force] | list | restore NAME | delete NAME
+keepstack export    FILE
+keepstack import    FILE
+keepstack compact   [--dry-run]
 keepstack --version
 ```
+
+Todos los comandos que trabajan sobre un estado aceptan `--data-dir` (por defecto `.keepstack`). `restore`, `import` y
+`compact` necesitan que keepstack esté parado y guardan antes el estado anterior como snapshot `pre-restore` / `pre-compact`,
+para poder deshacerlos siempre.
 
 | Opción | Por defecto | Descripción |
 |---|---|---|
@@ -150,6 +206,8 @@ keepstack --version
 | `--data-dir` | `.keepstack` | Dónde se guarda el journal |
 | `--image` | `keepstack-emulator` | Imagen del emulador; se construye automáticamente si es la de por defecto y no existe |
 | `--reset` | | Borra el estado guardado y empieza de cero |
+| `-d`, `--detach` | | Ejecuta en segundo plano; los registros van a `.keepstack/keepstack.log` |
+| `--shims` | | Esquiva errores conocidos del emulador (consulta [cómo funciona](../how-it-works.md#compatibility-shims)); se recuerda para ese estado |
 | `--verbose` | | Registra cada petición |
 
 Puedes ejecutar varios entornos aislados en paralelo con distintos `--port`, `--emulator-port` y `--data-dir`.

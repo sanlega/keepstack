@@ -73,6 +73,29 @@ If the fresh emulator hands out a value that the client already associates with 
 counters drift), keepstack gives the new value a unique alias with the same prefix, so two resources can never
 appear with the same ID.
 
+## Compatibility shims
+
+`keepstack up --shims` enables small, targeted rewrites for known AWS Emulator bugs. They run on the emulator side of
+the ID translation, on live traffic **and** on replay, and are off by default so they never hide an incompatibility
+you did not ask to hide. Once a state directory has been used with `--shims`, the choice is remembered in the
+journal (`meta['shims']`) so the recorded calls replay the same way; `--reset` forgets it.
+
+| Shim | Emulator bug | Rewrite |
+|---|---|---|
+| `ec2-ipprotocol-all-ports` | With `IpProtocol=-1`, AWS ignores `FromPort`/`ToPort`; the emulator requires them to match, so Terraform cannot create `aws_security_group` (`InvalidPermission.NotFound` when revoking the default egress rule). | Drop `FromPort`/`ToPort` from `-1` permissions in `Authorize*`/`Revoke*SecurityGroup*` calls. |
+| `dynamodb-ondemand-throughput` | On-demand tables return `OnDemandThroughput {-1, -1}`, which AWS omits when no limit is set; Terraform shows a perpetual diff. | Remove that object from `CreateTable`/`DescribeTable`/`UpdateTable` responses when both values are `-1`. |
+
+## Snapshots and compaction
+
+- **Snapshots** (`keepstack snapshot save/restore`) copy the journal with SQLite's backup API, so saving is safe while
+  keepstack runs. `--include FILE` stores extra files (typically `terraform.tfstate`) and puts them back on restore.
+  Restoring or importing requires keepstack to be stopped and first saves the current state as `pre-restore`.
+- **Compaction** (`keepstack compact`) drops resources that were created and later deleted: a `Delete<Noun>` is paired
+  with the latest `Create<Noun>` whose request or response contains the deleted resource's identifiers, and the calls
+  in between that reference only that resource go with them; for REST APIs a `DELETE` on a path cancels earlier writes
+  to it (versioned S3 buckets are left alone). Anything shared with a surviving resource is kept. The result is
+  replayed in a throwaway emulator before it replaces the journal, and the previous journal is saved as `pre-compact`.
+
 ## Limitations
 
 - **Heuristic.** A generated value that never appears in a write response cannot be learned, and very large responses

@@ -1,0 +1,179 @@
+{
+  "emulator_version": "1.0.322",
+  "source": "docs/compatibility.md",
+  "resources": {
+    "aws_apigatewayv2_api": {
+      "status": "ok",
+      "note": ""
+    },
+    "aws_apigatewayv2_integration": {
+      "status": "ok",
+      "note": ""
+    },
+    "aws_apigatewayv2_route": {
+      "status": "ok",
+      "note": ""
+    },
+    "aws_apigatewayv2_stage": {
+      "status": "ok",
+      "note": ""
+    },
+    "aws_cloudwatch_event_rule": {
+      "status": "ok",
+      "note": ""
+    },
+    "aws_cloudwatch_event_target": {
+      "status": "ok",
+      "note": ""
+    },
+    "aws_cloudwatch_log_group": {
+      "status": "ok",
+      "note": ""
+    },
+    "aws_dynamodb_table": {
+      "status": "partial",
+      "note": "Provisioned billing is fine; PAY_PER_REQUEST shows a perpetual diff (OnDemandThroughput returns -1)",
+      "workaround": "keepstack up --shims (shim dynamodb-ondemand-throughput), or lifecycle { ignore_changes = [on_demand_throughput] }"
+    },
+    "aws_dynamodb_table_item": {
+      "status": "ok",
+      "note": ""
+    },
+    "aws_ecr_repository": {
+      "status": "ok",
+      "note": ""
+    },
+    "aws_eip": {
+      "status": "ok",
+      "note": ""
+    },
+    "aws_iam_policy": {
+      "status": "ok",
+      "note": ""
+    },
+    "aws_iam_role": {
+      "status": "ok",
+      "note": ""
+    },
+    "aws_iam_role_policy_attachment": {
+      "status": "ok",
+      "note": ""
+    },
+    "aws_internet_gateway": {
+      "status": "ok",
+      "note": ""
+    },
+    "aws_kms_alias": {
+      "status": "ok",
+      "note": ""
+    },
+    "aws_kms_key": {
+      "status": "ok",
+      "note": "key UUID translated by keepstack"
+    },
+    "aws_lambda_event_source_mapping": {
+      "status": "ok",
+      "note": "mapping UUID translated by keepstack"
+    },
+    "aws_lambda_function": {
+      "status": "ok",
+      "note": "inline zip tested"
+    },
+    "aws_lambda_permission": {
+      "status": "ok",
+      "note": ""
+    },
+    "aws_nat_gateway": {
+      "status": "ok",
+      "note": ""
+    },
+    "aws_network_acl": {
+      "status": "ok",
+      "note": ""
+    },
+    "aws_route": {
+      "status": "ok",
+      "note": ""
+    },
+    "aws_route53_record": {
+      "status": "ok",
+      "note": "zone ID translated by keepstack"
+    },
+    "aws_route53_zone": {
+      "status": "ok",
+      "note": "zone ID translated by keepstack"
+    },
+    "aws_route_table": {
+      "status": "ok",
+      "note": ""
+    },
+    "aws_route_table_association": {
+      "status": "ok",
+      "note": ""
+    },
+    "aws_s3_bucket": {
+      "status": "ok",
+      "note": ""
+    },
+    "aws_s3_bucket_policy": {
+      "status": "partial",
+      "note": "Works with a non-public principal; Principal = \"*\" is rejected (BlockPublicPolicy enforced)",
+      "workaround": "Use a specific principal"
+    },
+    "aws_s3_bucket_versioning": {
+      "status": "ok",
+      "note": ""
+    },
+    "aws_s3_object": {
+      "status": "ok",
+      "note": ""
+    },
+    "aws_secretsmanager_secret": {
+      "status": "ok",
+      "note": "secret ARN suffix translated by keepstack"
+    },
+    "aws_secretsmanager_secret_version": {
+      "status": "ok",
+      "note": "secret ARN suffix translated by keepstack"
+    },
+    "aws_security_group": {
+      "status": "broken",
+      "note": "Emulator bug: Terraform revokes the default egress rule (IpProtocol=-1, ports 0-0) and the emulator answers InvalidPermission.NotFound",
+      "workaround": "keepstack up --shims (shim ec2-ipprotocol-all-ports), or use the default security group"
+    },
+    "aws_sns_topic": {
+      "status": "ok",
+      "note": ""
+    },
+    "aws_sns_topic_subscription": {
+      "status": "ok",
+      "note": "SQS protocol tested"
+    },
+    "aws_sqs_queue": {
+      "status": "ok",
+      "note": ""
+    },
+    "aws_ssm_parameter": {
+      "status": "ok",
+      "note": ""
+    },
+    "aws_subnet": {
+      "status": "ok",
+      "note": ""
+    },
+    "aws_vpc": {
+      "status": "ok",
+      "note": ""
+    },
+    "aws_vpc_security_group_egress_rule": {
+      "status": "broken",
+      "note": "Needs an aws_security_group, which cannot be created on this emulator version",
+      "workaround": "keepstack up --shims (fixes aws_security_group)"
+    },
+    "aws_vpc_security_group_ingress_rule": {
+      "status": "broken",
+      "note": "Needs an aws_security_group, which cannot be created on this emulator version",
+      "workaround": "keepstack up --shims (fixes aws_security_group)"
+    }
+  }
+}

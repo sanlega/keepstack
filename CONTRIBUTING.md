@@ -18,11 +18,17 @@ keepstack --version
 
 | Path | Contents |
 |---|---|
-| `src/keepstack/cli.py` | The whole tool: proxy, journal, replay, ID translation and the `up` / `env` commands |
+| `src/keepstack/proxy.py` | The engine: proxy, write-ahead journal, replay and ID translation |
+| `src/keepstack/cli.py` | Command line: argument parsing, `up` and `env`, wiring for every other command |
+| `src/keepstack/daemon.py` | `up -d`, `down`, `status`, `logs` |
+| `src/keepstack/check.py`, `compat.json` | `check` and the machine-readable compatibility matrix |
+| `src/keepstack/doctor.py` | `doctor` |
+| `src/keepstack/snapshot.py`, `compact.py` | Snapshots, `export`/`import`, `compact` |
+| `src/keepstack/shims.py` | Opt-in emulator workarounds (`--shims`) |
 | `src/keepstack/Dockerfile` | Emulator image, built automatically on first `keepstack up` |
 | `examples/quickstart/` | Terraform example used in the README and by the end-to-end tests |
-| `tests/test_unit.py` | Fast tests: request classification and ID translation |
-| `tests/test_e2e.py` | Real Docker + Terraform: apply, hard reboot, crash recovery, single-instance guard |
+| `tests/test_*.py` | Fast unit tests, one file per module |
+| `tests/test_e2e*.py` | Real Docker (+ Terraform) end-to-end suites: persistence, background mode, compaction, shims |
 | `tests/compat/` | Terraform configurations behind the [compatibility matrix](docs/compatibility.md) |
 | `docs/` | Design notes, compatibility matrix, translations and logo |
 
@@ -39,10 +45,10 @@ Terraform are missing. Useful variables:
 | Variable | Purpose |
 |---|---|
 | `TERRAFORM` | Path to a specific Terraform binary (default: `terraform` on `PATH`) |
-| `KEEPSTACK_E2E_PORT` | Port for the end-to-end run (default `9340`; the emulator uses the next one) |
+| `KEEPSTACK_E2E_PORT` | Port for the main end-to-end run (default `9340`; the emulator uses the next one). The other suites use 9350, 9360 and 9380 (`KEEPSTACK_E2E_DAEMON_PORT`, `KEEPSTACK_E2E_COMPACT_PORT`, `KEEPSTACK_E2E_SHIMS_PORT`) |
 | `TF_PLUGIN_CACHE_DIR` | Reuse downloaded providers between runs |
 
-Unit tests only: `python -m unittest tests.test_unit -v`.
+Unit tests only (no Docker): `PYTHONPATH=src python -m unittest tests.test_unit tests.test_check tests.test_doctor tests.test_daemon tests.test_snapshot tests.test_compact tests.test_shims`.
 
 ## Pull requests
 

@@ -44,7 +44,7 @@ jobs:
           keepstack --version
           keepstack env --shell sh
       - name: Unit tests
-        run: python -m unittest tests.test_unit -v
+        run: python -m unittest discover -s tests -p "test_[!e]*.py" -v  # everything except the e2e suites
 
   e2e:
     name: end-to-end (Docker + Terraform)
@@ -59,4 +59,6 @@ jobs:
         with:
           terraform_wrapper: false  # the wrapper changes exit codes, which the tests assert on
       - name: End-to-end tests
-        run: python -m unittest tests.test_e2e -v
+        env:
+          PYTHONPATH: src
+        run: python -m unittest tests.test_e2e tests.test_e2e_daemon tests.test_e2e_compact tests.test_e2e_shims -v

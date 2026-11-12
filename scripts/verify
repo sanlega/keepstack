@@ -1,5 +1,6 @@
 #!/bin/sh
-# Unit tests + e2e (the e2e skips itself if docker, the image or terraform is missing).
+# Unit tests + e2e (the e2e suites skip themselves if docker or terraform is missing).
 set -e
 cd "$(dirname "$0")/.."
-exec python3 -m unittest discover -s tests -v
+# Tests import keepstack from src/ without installing it.
+PYTHONPATH="$PWD/src${PYTHONPATH:+:$PYTHONPATH}" exec python3 -m unittest discover -s tests -v
