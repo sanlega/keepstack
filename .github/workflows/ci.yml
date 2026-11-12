@@ -24,6 +24,20 @@ jobs:
       - run: pip install ruff==0.17.4
       - run: ruff check .
 
+  pre-commit-hook:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - name: Run the hook the way other repositories use it
+        run: |
+          pip install pre-commit
+          demo="$RUNNER_TEMP/demo" && mkdir -p "$demo" && cp examples/quickstart/main.tf "$demo/"
+          cd "$demo" && git init -q && git add -A
+          pre-commit try-repo "$GITHUB_WORKSPACE" keepstack-check --all-files
+
   unit:
     name: unit (${{ matrix.os }}, py${{ matrix.python }})
     runs-on: ${{ matrix.os }}

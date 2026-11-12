@@ -1,0 +1,7 @@
+- id: keepstack-check
+  name: keepstack check
+  description: Report Terraform resources that will not work on AWS Emulator (offline, no Docker or AWS account needed).
+  entry: keepstack check --offline
+  language: python
+  files: \.tf$
+  pass_filenames: false

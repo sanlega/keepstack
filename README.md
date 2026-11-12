@@ -134,6 +134,18 @@ keepstack check: examples/quickstart (scanned .tf files), emulator 1.0.322
 14 resources: 13 ok, 1 with caveats, 0 broken, 0 untested.
 ```
 
+`keepstack check` is also a [pre-commit](https://pre-commit.com) hook. It runs offline, without Docker:
+
+```yaml
+# .pre-commit-config.yaml
+repos:
+  - repo: https://github.com/sanlega/keepstack
+    rev: v0.3.0
+    hooks:
+      - id: keepstack-check
+        args: [infra]   # your Terraform directory (default: the repository root)
+```
+
 Snapshots make risky changes cheap to try:
 
 ```sh
