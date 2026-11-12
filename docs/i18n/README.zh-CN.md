@@ -136,6 +136,18 @@ keepstack check: examples/quickstart (scanned .tf files), emulator 1.0.322
 14 resources: 13 ok, 1 with caveats, 0 broken, 0 untested.
 ```
 
+`keepstack check` 也可以作为 [pre-commit](https://pre-commit.com) 钩子使用，离线运行，不需要 Docker：
+
+```yaml
+# .pre-commit-config.yaml
+repos:
+  - repo: https://github.com/sanlega/keepstack
+    rev: v0.3.0
+    hooks:
+      - id: keepstack-check
+        args: [infra]   # 你的 Terraform 目录（默认：仓库根目录）
+```
+
 快照让尝试有风险的改动变得很便宜：
 
 ```sh

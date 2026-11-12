@@ -10,6 +10,10 @@ All notable changes to this project are documented here. The format follows
   [#19](https://github.com/sanlega/keepstack/issues/19)).
 
 ### Added
+- pre-commit hook `keepstack-check` (`.pre-commit-hooks.yaml`): runs `keepstack check --offline` when `.tf` files
+  change. No Docker or network needed.
+
+### Added
 - `keepstack validate [PATH]`: applies a Terraform directory on keepstack (init, plan, apply, plan again) and reports
   config errors, emulator gaps (HTTP 501 or known bugs, warnings unless `--strict`) and non-idempotent resources, with
   file and line. Uses a temporary override file and a local backend inside the data dir, so the user's files and
