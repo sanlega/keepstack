@@ -5,6 +5,7 @@ import sqlite3
 import tempfile
 import unittest
 from argparse import Namespace
+from unittest import mock
 
 from keepstack import daemon
 
@@ -56,6 +57,19 @@ class Daemon(unittest.TestCase):
         self.assertFalse(daemon.pid_alive(2 ** 22 + 12345))
         self.assertTrue(daemon.collect_status(self.dir)["stale"])
         self.assertEqual(daemon.cmd_down(Namespace(data_dir=self.dir)), 0)
+        self.assertIsNone(daemon.read_run(self.dir))
+
+    def test_run_file_from_another_machine_names_a_live_unrelated_pid(self):  # regression #31
+        # A restored cache carried run.json over; on this machine that pid is some other live process (here: us)
+        # and nothing listens on the port. It is not keepstack: up -d must start, down must not signal it.
+        with open(daemon.run_path(self.dir), "w") as f:
+            json.dump({"pid": os.getpid(), "port": 1, "container": ""}, f)
+        self.assertTrue(daemon.pid_alive(os.getpid()))
+        self.assertFalse(daemon.is_running(daemon.read_run(self.dir)))
+        self.assertFalse(daemon.collect_status(self.dir)["running"])
+        with mock.patch.object(daemon.os, "kill") as kill:
+            self.assertEqual(daemon.cmd_down(Namespace(data_dir=self.dir)), 0)
+        kill.assert_not_called()
         self.assertIsNone(daemon.read_run(self.dir))
 
     def test_down_without_run_file_is_noop(self):

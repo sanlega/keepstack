@@ -42,6 +42,9 @@ All notable changes to this project are documented here. The format follows
   (`SGAEFE`, `ctksym`).
 - Action baseline: the cache no longer includes the Terraform providers kept in `<data-dir>/cache` (125 MiB for the
   AWS provider); only the journal and the Terraform state are saved.
+- A `run.json` carried to another machine or boot (restored Action baseline, copied data dir) could name a live,
+  unrelated process: `keepstack up -d` then refused to start and `keepstack down` could have signalled that process.
+  A run file now only counts when its pid is alive and its port answers; the action no longer caches `run.json`.
 
 ## [0.2.0] - 2026-11-12
 
