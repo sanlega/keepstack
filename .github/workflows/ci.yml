@@ -55,7 +55,7 @@ jobs:
       - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
-      - uses: hashicorp/setup-terraform@v3
+      - uses: hashicorp/setup-terraform@v4
         with:
           terraform_wrapper: false  # the wrapper changes exit codes, which the tests assert on
       - name: End-to-end tests
