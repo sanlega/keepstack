@@ -186,31 +186,69 @@ translations and your snapshots. It only answers on `127.0.0.1`.
 
 ## In GitHub Actions
 
-Give any workflow a local AWS with one step. Your AWS CLI, SDKs and Terraform are pointed at it automatically.
+### Validate every pull request
+
+Add one step and every pull request that touches your infrastructure gets applied on the official AWS Emulator, with
+no AWS account and no tokens:
 
 ```yaml
+# .github/workflows/infra.yml
+on:
+  push:
+    branches: [main]
+  pull_request:
+
 jobs:
-  test:
+  validate:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write   # for the PR comment
     steps:
       - uses: actions/checkout@v7
-      - uses: sanlega/keepstack@v0.2.0
+      - uses: sanlega/keepstack@v0.3.0
         with:
-          shims: true          # optional: work around known emulator bugs
+          validate: infra/            # your Terraform directory
+          baseline: true              # validate PRs on top of main's environment
+          shims: true
+          run: pytest tests/smoke     # optional: check the resources really work
+```
+
+- **Job summary and a sticky PR comment** with the plan, the steps and every problem found.
+- **Inline annotations** on the `.tf` lines that fail.
+- **Baseline:** pushes to `main` save the resulting environment; pull requests restore it and are applied on top, so
+  the report shows the real incremental plan (replacements, destroys, `moved` blocks) instead of a greenfield apply.
+  Other local emulators start from an empty account on every run.
+
+### Just a local AWS
+
+Without `validate`, the action only starts keepstack and points the AWS CLI, SDKs and Terraform at it:
+
+```yaml
+      - uses: sanlega/keepstack@v0.3.0
+        with:
           cache: true          # optional: keep the state between runs
       - run: terraform init && terraform apply -auto-approve
 ```
 
 | Input | Default | Description |
 |---|---|---|
+| `validate` | | Terraform directory to validate. Empty: only start keepstack |
+| `baseline` | `false` | Save the environment on pushes to the default branch and validate pull requests on top of it |
+| `comment` | `true` | Post the report as one pull request comment, updated on every run |
+| `run` | | Commands to run after the apply, one per line (see `validate --run`) |
+| `strict` | `false` | Emulator gaps fail the validation too |
+| `fail-on-destroy` | `false` | Fail when the plan replaces or destroys resources |
 | `shims` | `false` | Same as `keepstack up --shims` |
-| `cache` | `false` | Restore the state from the previous run and save it at the end of the job |
+| `cache` | `false` | Without `validate`: restore the state from the previous run and save it at the end of the job |
 | `cache-key` | `keepstack` | Cache key prefix, for independent environments |
 | `port` | `9297` | Port keepstack listens on |
 | `data-dir` | `.keepstack` | State directory |
 | `python-version` | `3.12` | Python used to run keepstack |
+| `github-token` | `github.token` | Token used for the pull request comment |
 
-The action needs a Linux runner (Docker with Linux containers). Output: `endpoint-url`.
+Outputs: `endpoint-url`, `result` (`passed` / `failed`), `report` (JSON report path), `baseline-restored`. The action
+needs a Linux runner (Docker with Linux containers) and installs Terraform if the runner does not have it.
 
 ## Features
 

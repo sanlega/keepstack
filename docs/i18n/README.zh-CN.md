@@ -184,31 +184,67 @@ Terraform output（`TF_OUTPUT_<name>`），退出码非零则验证失败。在 
 
 ## 在 GitHub Actions 中使用
 
-只需一个步骤，就能让任何工作流拥有本地 AWS。你的 AWS CLI、SDK 和 Terraform 会自动指向它。
+### 验证每一个拉取请求
+
+只需一个步骤，每个涉及基础设施的拉取请求都会在官方 AWS Emulator 上执行 apply，无需 AWS 账号或令牌：
 
 ```yaml
+# .github/workflows/infra.yml
+on:
+  push:
+    branches: [main]
+  pull_request:
+
 jobs:
-  test:
+  validate:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write   # 用于 PR 评论
     steps:
       - uses: actions/checkout@v7
-      - uses: sanlega/keepstack@v0.2.0
+      - uses: sanlega/keepstack@v0.3.0
         with:
-          shims: true          # 可选：绕过已知的模拟器缺陷
+          validate: infra/            # 你的 Terraform 目录
+          baseline: true              # 在 main 的环境之上验证 PR
+          shims: true
+          run: pytest tests/smoke     # 可选：检查资源是否真的可用
+```
+
+- **作业摘要和一条固定的 PR 评论**，包含 plan、各个步骤以及发现的每个问题。
+- 在出错的 `.tf` 行上显示**行内注释**。
+- **基线：** 推送到 `main` 时保存得到的环境；拉取请求会恢复它并在其之上执行 apply，因此报告显示的是真实的增量 plan
+  （替换、销毁、`moved` 块），而不是从零开始的 apply。其他本地模拟器每次运行都从空账号开始。
+
+### 只需要一个本地 AWS
+
+不设置 `validate` 时，该 action 只启动 keepstack，并让 AWS CLI、SDK 和 Terraform 指向它：
+
+```yaml
+      - uses: sanlega/keepstack@v0.3.0
+        with:
           cache: true          # 可选：在多次运行之间保留状态
       - run: terraform init && terraform apply -auto-approve
 ```
 
 | 输入 | 默认值 | 说明 |
 |---|---|---|
+| `validate` | | 要验证的 Terraform 目录。为空时只启动 keepstack |
+| `baseline` | `false` | 在推送到默认分支时保存环境，并在其之上验证拉取请求 |
+| `comment` | `true` | 将报告作为拉取请求中的一条评论发布，每次运行时更新 |
+| `run` | | apply 之后运行的命令，每行一条（见 `validate --run`） |
+| `strict` | `false` | 模拟器缺陷也会导致验证失败 |
+| `fail-on-destroy` | `false` | plan 替换或销毁资源时失败 |
 | `shims` | `false` | 等同于 `keepstack up --shims` |
-| `cache` | `false` | 恢复上一次运行的状态，并在作业结束时保存 |
+| `cache` | `false` | 不使用 `validate` 时：恢复上次运行的状态，并在作业结束时保存 |
 | `cache-key` | `keepstack` | 缓存键前缀，用于相互独立的环境 |
 | `port` | `9297` | keepstack 监听的端口 |
 | `data-dir` | `.keepstack` | 状态目录 |
-| `python-version` | `3.12` | 用于运行 keepstack 的 Python 版本 |
+| `python-version` | `3.12` | 运行 keepstack 所用的 Python |
+| `github-token` | `github.token` | 用于拉取请求评论的令牌 |
 
-该 action 需要 Linux runner（支持 Linux 容器的 Docker）。输出：`endpoint-url`。
+输出：`endpoint-url`、`result`（`passed` / `failed`）、`report`（JSON 报告路径）、`baseline-restored`。该 action 需要
+Linux runner（支持 Linux 容器的 Docker），如果 runner 上没有 Terraform 会自动安装。
 
 ## 特性
 

@@ -17,6 +17,12 @@ All notable changes to this project are documented here. The format follows
 - Inside GitHub Actions, `keepstack validate` prints every finding and destructive change as an inline annotation on
   the `.tf` line.
 
+- GitHub Action validator mode: `validate: <dir>` runs `keepstack validate`, writes the report to the job summary and
+  to a single pull request comment that is updated on every run (`comment`), installs Terraform when missing, and
+  exposes `result`, `report` and `baseline-restored` outputs. Also `run`, `strict` and `fail-on-destroy` inputs.
+- `baseline: true`: pushes to the default branch save the validated environment (journal and Terraform state); pull
+  requests restore it and are validated on top of it, so the report shows the incremental plan.
+
 ### Changed
 - `keepstack up --reset` also deletes the Terraform state kept by `keepstack validate`.
 

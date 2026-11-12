@@ -38,3 +38,60 @@ jobs:
           keepstack up -d --shims --data-dir "$state"
           terraform plan -detailed-exitcode -input=false
           keepstack status --data-dir "$state"
+
+  validate:
+    # Validator mode: Terraform is installed by the action, the report goes to the job summary and to a sticky
+    # PR comment, and the default branch keeps a baseline that pull requests are validated on top of.
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v7
+      - id: ok
+        uses: ./
+        with:
+          validate: examples/quickstart
+          shims: "true"
+          baseline: "true"
+          cache-key: action-test
+          run: |
+            aws ec2 describe-vpcs --vpc-ids "$TF_OUTPUT_vpc_id" --query 'Vpcs[0].CidrBlock' --output text
+      - name: Check the outputs
+        env:
+          RESULT: ${{ steps.ok.outputs.result }}
+          REPORT: ${{ steps.ok.outputs.report }}
+          RESTORED: ${{ steps.ok.outputs.baseline-restored }}
+        run: |
+          test "$RESULT" = passed
+          jq -e '.steps.smoke == "ok"' "$REPORT"
+          echo "baseline restored: $RESTORED"
+          if [ "$RESTORED" = true ]; then
+            # On top of the default-branch baseline the example is already applied: nothing to change.
+            jq -e '.changes | length == 0' "$REPORT"
+          fi
+
+  validate-broken:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v7
+      - id: broken
+        uses: ./
+        continue-on-error: true
+        with:
+          validate: tests/fixtures/validate-broken
+          comment: "false"  # the expected failure would only be noise on every pull request
+      - name: The broken configuration must fail
+        env:
+          OUTCOME: ${{ steps.broken.outcome }}
+          RESULT: ${{ steps.broken.outputs.result }}
+          REPORT: ${{ steps.broken.outputs.report }}
+        run: |
+          test "$OUTCOME" = failure
+          test "$RESULT" = failed
+          jq -e '.findings[0].kind == "config" and .findings[0].file == "main.tf"' "$REPORT"
