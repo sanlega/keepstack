@@ -189,5 +189,26 @@ class Render(unittest.TestCase):
         self.assertIn("will be **replaced**", out)
 
 
+class Annotations(unittest.TestCase):
+    def test_findings_and_destructive_changes_become_workflow_commands(self):
+        root = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, root)
+        tf = os.path.join(root, "infra")
+        os.mkdir(tf)
+        with open(os.path.join(tf, "main.tf"), "w") as fh:
+            fh.write('\n\n\nresource "aws_vpc" "a" {\n}\n')
+        rep = {"changes": [{"address": "aws_vpc.a", "action": "replace", "type": "aws_vpc"},
+                           {"address": "aws_vpc.b", "action": "create", "type": "aws_vpc"}],
+               "findings": [{"kind": "config", "address": "aws_vpc.a", "message": "bad\n100%", "hint": "",
+                             "file": "main.tf", "line": 4},
+                            {"kind": "emulator", "address": "", "message": "x", "hint": "h", "file": None,
+                             "line": None}]}
+        self.assertEqual(v.annotations(rep, tf, root), [
+            "::error file=infra/main.tf,line=4,title=keepstack%3A aws_vpc.a::config error: bad%0A100%25",
+            "::warning title=keepstack%3A terraform::emulator gap: x (hint: h)",
+            "::warning file=infra/main.tf,line=4,title=keepstack%3A aws_vpc.a::this change will replace aws_vpc.a",
+        ])
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -343,6 +343,35 @@ def render_markdown(rep):
     return "\n".join(out)
 
 
+def _escape(text, prop=False):
+    """GitHub workflow command escaping (properties also escape ':' and ',')."""
+    text = str(text).replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
+    return text.replace(":", "%3A").replace(",", "%2C") if prop else text
+
+
+def annotations(rep, tf_dir, root):
+    """-> GitHub workflow commands (::error / ::warning) that show findings inline in the pull request diff."""
+    level = {"config": "error", "drift": "error", "emulator": "warning"}
+    items = [(level.get(f["kind"], "error"), f["address"], f.get("file"), f.get("line"),
+              f"{LABELS.get(f['kind'], f['kind'])}: {f['message']}" + (f" (hint: {f['hint']})" if f.get("hint") else ""))
+             for f in rep["findings"]]
+    for c in rep["changes"]:
+        if c["action"] in DESTRUCTIVE:
+            file, line = locate(tf_dir, c["address"])
+            items.append(("warning", c["address"], file, line, f"this change will {c['action']} {c['address']}"))
+    out = []
+    for lvl, address, file, line, msg in items:
+        props = []
+        if file:
+            rel = relpath(os.path.join(tf_dir, file), root).replace(os.sep, "/")
+            props.append("file=" + _escape(rel, True))
+            if line:
+                props.append(f"line={line}")
+        props.append("title=" + _escape(f"keepstack: {address or 'terraform'}", True))
+        out.append(f"::{lvl} {','.join(props)}::{_escape(msg)}")
+    return out
+
+
 def cmd_validate(args):
     try:
         rep = validate(args)
@@ -355,6 +384,10 @@ def cmd_validate(args):
     if args.markdown:
         with open(args.markdown, "a", encoding="utf-8") as fh:  # append: $GITHUB_STEP_SUMMARY may hold more
             fh.write(render_markdown(rep) + "\n")
+    if os.environ.get("GITHUB_ACTIONS") == "true":
+        root = os.environ.get("GITHUB_WORKSPACE") or os.getcwd()
+        for line in annotations(rep, os.path.abspath(args.path), root):
+            print(line, file=sys.stderr if args.json else sys.stdout)  # keep --json output parseable
     print(json.dumps(rep, indent=2) if args.json else render_text(rep))
     return 0 if rep["result"] == "passed" else 1
 
