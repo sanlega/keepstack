@@ -151,6 +151,30 @@ class Runner:
         return p.returncode, p.stdout, p.stderr
 
 
+def output_env(text):
+    """`terraform output -json` -> {"TF_OUTPUT_<name>": value}: strings as they are, anything else as JSON."""
+    try:
+        outputs = json.loads(text or "{}")
+    except ValueError:
+        return {}
+    return {f"TF_OUTPUT_{k}": o.get("value") if isinstance(o.get("value"), str) else json.dumps(o.get("value"))
+            for k, o in outputs.items()}
+
+
+def run_smoke(commands, env, timeout):
+    """Run each command through the shell -> [{"command", "exit_code", "output"}] (output tail only)."""
+    results = []
+    for cmd in commands:
+        try:
+            p = subprocess.run(cmd, shell=True, env=env, capture_output=True, encoding="utf-8", errors="replace",
+                               timeout=timeout, check=False)
+            code, out = p.returncode, (p.stdout or "") + (p.stderr or "")
+        except subprocess.TimeoutExpired:
+            code, out = None, f"timed out after {timeout} s"
+        results.append({"command": cmd, "exit_code": code, "output": out.strip()[-TAIL:]})
+    return results
+
+
 def keepstack_env(port):
     from .cli import ENV, UNSET  # cli imports this module
     env = {k: v for k, v in os.environ.items() if k not in UNSET}
@@ -221,8 +245,8 @@ def validate(args):
     os.makedirs(os.path.join(data_dir, "cache"), exist_ok=True)
     os.makedirs(os.path.dirname(state_file), exist_ok=True)
     compat = check.load_compat()["resources"]
-    report = {"path": args.path, "state": state_file, "steps": {}, "changes": [], "drift": [], "findings": [],
-              "result": None}
+    report = {"path": args.path, "state": state_file, "steps": {}, "changes": [], "drift": [], "smoke": [],
+              "findings": [], "result": None}
     steps, findings = report["steps"], report["findings"]
     started = time.time()
     with running_keepstack(args) as port, terraform_override(tf_dir, state_file):
@@ -255,6 +279,14 @@ def validate(args):
                 steps["idempotency"] = "failed"
         elif steps.get("apply"):
             steps["idempotency"] = "skipped"
+        if args.run and steps.get("apply") in ("ok", "gap"):
+            rc, out, _ = runner.tf("output", "-json")
+            report["smoke"] = run_smoke(args.run, dict(env, **output_env(out if rc == 0 else "")), args.timeout)
+            failed = [r for r in report["smoke"] if r["exit_code"] != 0]
+            steps["smoke"] = "failed" if failed else "ok"
+            findings.extend({"kind": "smoke", "address": "", "hint": "", "file": None, "line": None,
+                             "message": f"`{r['command']}` exited with {r['exit_code']}: {r['output'][-1000:]}"}
+                            for r in failed)
         if args.destroy and steps["init"] == "ok":
             step("destroy", "apply", "-destroy", "-auto-approve", "-input=false", "-json")
         with contextlib.suppress(OSError):
@@ -274,7 +306,7 @@ def result_of(report, args):
 
 # --- output --------------------------------------------------------------------------------------
 
-LABELS = {"config": "config error", "emulator": "emulator gap", "drift": "not idempotent"}
+LABELS = {"config": "config error", "emulator": "emulator gap", "drift": "not idempotent", "smoke": "smoke test"}
 
 
 def counts(chs):
@@ -294,6 +326,7 @@ def render_text(rep):
     for ch in rep["changes"]:
         if ch["action"] in DESTRUCTIVE:
             out.append(f"    ! {ch['action']}: {ch['address']}")
+    out += [f"smoke: {r['command']}  ->  exit {r['exit_code']}" for r in rep.get("smoke", [])]
     out.append("")
     for f in rep["findings"]:
         where = f" ({f['file']}:{f['line']})" if f.get("file") else ""
@@ -327,7 +360,7 @@ def render_markdown(rep):
         out += [f"> - `{ch['address']}` will be **{ch['action']}d**" for ch in destructive]
         out.append("")
     if rep["findings"]:
-        icon = {"config": "❌", "emulator": "⚠️", "drift": "🔁"}
+        icon = {"config": "❌", "emulator": "⚠️", "drift": "🔁", "smoke": "🧪"}
         out += ["| | Kind | Resource | Message |", "|---|---|---|---|"]
         for f in rep["findings"]:
             where = f" `{f['file']}:{f['line']}`" if f.get("file") else ""
@@ -343,6 +376,35 @@ def render_markdown(rep):
     return "\n".join(out)
 
 
+def _escape(text, prop=False):
+    """GitHub workflow command escaping (properties also escape ':' and ',')."""
+    text = str(text).replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
+    return text.replace(":", "%3A").replace(",", "%2C") if prop else text
+
+
+def annotations(rep, tf_dir, root):
+    """-> GitHub workflow commands (::error / ::warning) that show findings inline in the pull request diff."""
+    level = {"config": "error", "drift": "error", "emulator": "warning"}
+    items = [(level.get(f["kind"], "error"), f["address"], f.get("file"), f.get("line"),
+              f"{LABELS.get(f['kind'], f['kind'])}: {f['message']}" + (f" (hint: {f['hint']})" if f.get("hint") else ""))
+             for f in rep["findings"]]
+    for c in rep["changes"]:
+        if c["action"] in DESTRUCTIVE:
+            file, line = locate(tf_dir, c["address"])
+            items.append(("warning", c["address"], file, line, f"this change will {c['action']} {c['address']}"))
+    out = []
+    for lvl, address, file, line, msg in items:
+        props = []
+        if file:
+            rel = relpath(os.path.join(tf_dir, file), root).replace(os.sep, "/")
+            props.append("file=" + _escape(rel, True))
+            if line:
+                props.append(f"line={line}")
+        props.append("title=" + _escape(f"keepstack: {address or 'terraform'}", True))
+        out.append(f"::{lvl} {','.join(props)}::{_escape(msg)}")
+    return out
+
+
 def cmd_validate(args):
     try:
         rep = validate(args)
@@ -355,6 +417,10 @@ def cmd_validate(args):
     if args.markdown:
         with open(args.markdown, "a", encoding="utf-8") as fh:  # append: $GITHUB_STEP_SUMMARY may hold more
             fh.write(render_markdown(rep) + "\n")
+    if os.environ.get("GITHUB_ACTIONS") == "true":
+        root = os.environ.get("GITHUB_WORKSPACE") or os.getcwd()
+        for line in annotations(rep, os.path.abspath(args.path), root):
+            print(line, file=sys.stderr if args.json else sys.stdout)  # keep --json output parseable
     print(json.dumps(rep, indent=2) if args.json else render_text(rep))
     return 0 if rep["result"] == "passed" else 1
 
@@ -370,6 +436,9 @@ def add_parser(sub, defaults):
     v.add_argument("--terraform", default=os.environ.get("TERRAFORM", "terraform"),
                    help="Terraform or OpenTofu binary (default: $TERRAFORM or terraform)")
     v.add_argument("--timeout", type=int, default=1800, help="seconds allowed per Terraform command")
+    v.add_argument("--run", action="append", default=[], metavar="CMD",
+                   help="command to run after the apply, e.g. smoke tests (repeatable); it gets the AWS variables "
+                        "and TF_OUTPUT_<name> for every Terraform output")
     v.add_argument("--destroy", action="store_true", help="destroy everything at the end")
     v.add_argument("--strict", action="store_true", help="emulator gaps fail the validation too")
     v.add_argument("--fail-on-destroy", action="store_true", help="fail if the plan replaces or destroys resources")

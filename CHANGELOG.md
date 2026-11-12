@@ -12,6 +12,11 @@ All notable changes to this project are documented here. The format follows
   backend are untouched and the next run starts from the previous infrastructure. Lists replacements and destroys
   (`--fail-on-destroy`), and writes `--json`, `--report` and `--markdown` reports. Works with OpenTofu (`--terraform`).
 
+- `keepstack validate --run CMD` (repeatable): smoke tests after the apply, with the AWS variables and every Terraform
+  output as `TF_OUTPUT_<name>`; a failing command fails the validation.
+- Inside GitHub Actions, `keepstack validate` prints every finding and destructive change as an inline annotation on
+  the `.tf` line.
+
 ### Changed
 - `keepstack up --reset` also deletes the Terraform state kept by `keepstack validate`.
 

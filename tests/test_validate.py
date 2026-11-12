@@ -4,6 +4,7 @@ import contextlib
 import json
 import os
 import shutil
+import sys
 import tempfile
 import unittest
 from unittest import mock
@@ -31,7 +32,7 @@ def planned(addr, action):
 def args(**kw):
     return argparse.Namespace(**{"path": ".", "data_dir": ".keepstack", "port": 9297, "image": "img",
                                  "shims": False, "keep_running": False, "terraform": "terraform", "timeout": 60,
-                                 "destroy": False, "strict": False, "fail_on_destroy": False, **kw})
+                                 "destroy": False, "strict": False, "fail_on_destroy": False, "run": [], **kw})
 
 
 class Classify(unittest.TestCase):
@@ -166,6 +167,24 @@ class Flow(unittest.TestCase):
         self.assertEqual(calls, ["init"])
         self.assertEqual(rep["result"], "failed")
 
+    def test_smoke_commands_get_outputs_and_failures_fail(self):
+        check = (f'"{sys.executable}" -c "import os,sys; '
+                 "sys.exit(0 if os.environ.get('TF_OUTPUT_url') == 'http://x' "
+                 "and os.environ.get('TF_OUTPUT_ports') == '[80, 443]' else 3)\"")
+        outputs = (0, json.dumps({"url": {"value": "http://x"}, "ports": {"value": [80, 443]}}), "")
+        rep, calls = self.run_validate({"output": outputs}, run=[check])
+        self.assertEqual(calls[-1], "output")
+        self.assertEqual((rep["steps"]["smoke"], rep["smoke"][0]["exit_code"], rep["result"]), ("ok", 0, "passed"))
+        rep, _ = self.run_validate({"output": outputs}, run=[check, f'"{sys.executable}" -c "print(42); exit(7)"'])
+        self.assertEqual((rep["steps"]["smoke"], rep["result"]), ("failed", "failed"))
+        self.assertEqual(rep["findings"][0]["kind"], "smoke")
+        self.assertIn("exited with 7: 42", rep["findings"][0]["message"])
+
+    def test_no_smoke_when_apply_failed(self):
+        rep, calls = self.run_validate({"apply": (1, "", "boom")}, run=["exit 0"])
+        self.assertNotIn("output", calls)
+        self.assertEqual(rep["smoke"], [])
+
 
 REPORT = {"path": "infra", "result": "failed", "duration_seconds": 1.5,
           "steps": {"init": "ok", "plan": "ok", "apply": "failed"},
@@ -187,6 +206,27 @@ class Render(unittest.TestCase):
         self.assertIn("❌ failed", out)
         self.assertIn("bad \\| pipe", out)
         self.assertIn("will be **replaced**", out)
+
+
+class Annotations(unittest.TestCase):
+    def test_findings_and_destructive_changes_become_workflow_commands(self):
+        root = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, root)
+        tf = os.path.join(root, "infra")
+        os.mkdir(tf)
+        with open(os.path.join(tf, "main.tf"), "w") as fh:
+            fh.write('\n\n\nresource "aws_vpc" "a" {\n}\n')
+        rep = {"changes": [{"address": "aws_vpc.a", "action": "replace", "type": "aws_vpc"},
+                           {"address": "aws_vpc.b", "action": "create", "type": "aws_vpc"}],
+               "findings": [{"kind": "config", "address": "aws_vpc.a", "message": "bad\n100%", "hint": "",
+                             "file": "main.tf", "line": 4},
+                            {"kind": "emulator", "address": "", "message": "x", "hint": "h", "file": None,
+                             "line": None}]}
+        self.assertEqual(v.annotations(rep, tf, root), [
+            "::error file=infra/main.tf,line=4,title=keepstack%3A aws_vpc.a::config error: bad%0A100%25",
+            "::warning title=keepstack%3A terraform::emulator gap: x (hint: h)",
+            "::warning file=infra/main.tf,line=4,title=keepstack%3A aws_vpc.a::this change will replace aws_vpc.a",
+        ])
 
 
 if __name__ == "__main__":

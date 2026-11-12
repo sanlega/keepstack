@@ -170,7 +170,12 @@ emulator gap: aws_athena_workgroup.reports (main.tf:42)
 
 El estado de Terraform vive en el directorio de datos de keepstack, así que la siguiente ejecución parte de la
 infraestructura que dejó la anterior: el plan muestra solo lo que cambia, como un despliegue real. Los reemplazos y
-borrados se listan, y `--fail-on-destroy` los convierte en fallo. Otras opciones: `--json`, `--report FICHERO`,
+borrados se listan, y `--fail-on-destroy` los convierte en fallo.
+
+Añade `--run "pytest tests/smoke"` (repetible) para comprobar que los recursos funcionan de verdad tras el apply: el
+comando recibe las variables de AWS y cada output de Terraform como `TF_OUTPUT_<nombre>`, y si termina con error la
+validación falla. En GitHub Actions cada hallazgo se muestra además como anotación en la línea del `.tf`, dentro del diff
+del pull request. Otras opciones: `--json`, `--report FICHERO`,
 `--markdown FICHERO` (p. ej. `$GITHUB_STEP_SUMMARY`), `--destroy`, `--shims`, `--terraform tofu`.
 
 ## Panel

@@ -25,6 +25,7 @@ resource "aws_dynamodb_table" "t" {
 }
 '''
 QUEUE = 'resource "aws_sqs_queue" "jobs" {\n  name = "%s"\n}\n'
+OUTPUT = 'output "queue" {\n  value = aws_sqs_queue.jobs.url\n}\n'
 # The emulator answers 501 for Athena's ListTagsForResource.
 GAP = 'resource "aws_athena_workgroup" "gap" {\n  name = "validate-gap"\n}\n'
 # Rejected by the provider before any API call: a genuine configuration error.
@@ -78,18 +79,24 @@ class E2EValidate(unittest.TestCase):
         return r, rep
 
     def test_1_clean_config_passes(self):
-        r, rep = self.validate("env", {"main.tf": TABLE + QUEUE % "validate-jobs"}, "--shims", "--keep-running")
+        # The smoke command sees the Terraform outputs and the AWS variables pointing at keepstack.
+        smoke = (f'"{sys.executable}" -c "import os,sys; '
+                 "sys.exit(0 if os.environ['TF_OUTPUT_queue'].endswith('/validate-jobs') "
+                 f"and os.environ['AWS_ENDPOINT_URL'].endswith(':{PORT}') else 3)\"")
+        r, rep = self.validate("env", {"main.tf": TABLE + QUEUE % "validate-jobs" + OUTPUT},
+                               "--shims", "--keep-running", "--run", smoke)
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
-        self.assertEqual(rep["steps"], {"init": "ok", "plan": "ok", "apply": "ok", "idempotency": "ok"})
+        self.assertEqual(rep["steps"], {"init": "ok", "plan": "ok", "apply": "ok", "idempotency": "ok",
+                                        "smoke": "ok"})
         self.assertEqual(sorted(c["action"] for c in rep["changes"]), ["create", "create"])
 
     def test_2_state_persists_between_runs(self):
-        r, rep = self.validate("env", {"main.tf": TABLE + QUEUE % "validate-jobs"})
+        r, rep = self.validate("env", {"main.tf": TABLE + QUEUE % "validate-jobs" + OUTPUT})
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
         self.assertEqual(rep["changes"], [], "second run must start from the first run's infrastructure")
 
     def test_3_replacement_is_reported_and_can_fail(self):
-        r, rep = self.validate("env", {"main.tf": TABLE + QUEUE % "validate-jobs-v2"}, "--fail-on-destroy")
+        r, rep = self.validate("env", {"main.tf": TABLE + QUEUE % "validate-jobs-v2" + OUTPUT}, "--fail-on-destroy")
         self.assertEqual(r.returncode, 1, r.stdout + r.stderr)
         self.assertIn({"address": "aws_sqs_queue.jobs", "action": "replace", "type": "aws_sqs_queue"}, rep["changes"])
         self.assertIn("replace: aws_sqs_queue.jobs", r.stdout)
