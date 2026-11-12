@@ -25,6 +25,8 @@ keepstack --version
 | `src/keepstack/doctor.py` | `doctor` |
 | `src/keepstack/snapshot.py`, `compact.py` | Snapshots, `export`/`import`, `compact` |
 | `src/keepstack/shims.py` | Opt-in emulator workarounds (`--shims`) |
+| `src/keepstack/dashboard.py`, `dashboard.html` | `ui` and the read-only web dashboard |
+| `action.yml` | The GitHub Action (tested by `.github/workflows/action.yml`) |
 | `src/keepstack/Dockerfile` | Emulator image, built automatically on first `keepstack up` |
 | `examples/quickstart/` | Terraform example used in the README and by the end-to-end tests |
 | `tests/test_*.py` | Fast unit tests, one file per module |
@@ -45,10 +47,20 @@ Terraform are missing. Useful variables:
 | Variable | Purpose |
 |---|---|
 | `TERRAFORM` | Path to a specific Terraform binary (default: `terraform` on `PATH`) |
-| `KEEPSTACK_E2E_PORT` | Port for the main end-to-end run (default `9340`; the emulator uses the next one). The other suites use 9350, 9360 and 9380 (`KEEPSTACK_E2E_DAEMON_PORT`, `KEEPSTACK_E2E_COMPACT_PORT`, `KEEPSTACK_E2E_SHIMS_PORT`) |
+| `KEEPSTACK_E2E_PORT` | Port for the main end-to-end run (default `9340`; the emulator uses the next one). The other suites use 9350, 9360 and 9380 (`KEEPSTACK_E2E_DAEMON_PORT`, `KEEPSTACK_E2E_COMPACT_PORT`, `KEEPSTACK_E2E_SHIMS_PORT`, and 9390 for the dashboard) |
 | `TF_PLUGIN_CACHE_DIR` | Reuse downloaded providers between runs |
 
-Unit tests only (no Docker): `PYTHONPATH=src python -m unittest tests.test_unit tests.test_check tests.test_doctor tests.test_daemon tests.test_snapshot tests.test_compact tests.test_shims`.
+Unit tests only (no Docker): `PYTHONPATH=src python -m unittest tests.test_unit tests.test_check tests.test_doctor tests.test_daemon tests.test_snapshot tests.test_compact tests.test_shims tests.test_dashboard`.
+
+## Releasing
+
+1. Move the *Unreleased* entries in `CHANGELOG.md` under a new `## [x.y.z] - YYYY-MM-DD` heading and update the links.
+2. Set `__version__` in `src/keepstack/__init__.py` to the same version and merge to `main`.
+3. Tag and push: `git tag vX.Y.Z && git push origin vX.Y.Z`.
+
+The [release workflow](.github/workflows/release.yml) checks that the tag matches the version, builds and tests the
+wheel, publishes it to PyPI through trusted publishing and creates the GitHub release with the changelog notes.
+GitHub Action users pin `sanlega/keepstack@vX.Y.Z`.
 
 ## Pull requests
 

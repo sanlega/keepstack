@@ -155,21 +155,20 @@ def cmd_down(args):
     return 0
 
 
+def service_of(headers):
+    """AWS service of a journal row, from the SigV4 credential scope of its Authorization header."""
+    try:
+        h = json.loads(headers) if headers else {}
+        auth = next((v for k, v in h.items() if k.lower() == "authorization"), "")
+        m = SCOPE_RE.search(auth if isinstance(auth, str) else "")
+        return m.group(1) if m else "unknown"
+    except (ValueError, AttributeError):
+        return "unknown"
+
+
 def service_breakdown(rows):
-    """Counts journal rows by AWS service, from the SigV4 credential scope of each Authorization header."""
-    counts = Counter()
-    for (headers,) in rows:
-        service = "unknown"
-        try:
-            h = json.loads(headers) if headers else {}
-            auth = next((v for k, v in h.items() if k.lower() == "authorization"), "")
-            m = SCOPE_RE.search(auth if isinstance(auth, str) else "")
-            if m:
-                service = m.group(1)
-        except (ValueError, AttributeError):
-            pass
-        counts[service] += 1
-    return dict(counts.most_common())
+    """Counts journal rows by AWS service."""
+    return dict(Counter(service_of(headers) for (headers,) in rows).most_common())
 
 
 def journal_stats(data_dir):

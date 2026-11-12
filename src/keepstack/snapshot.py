@@ -182,17 +182,23 @@ def cmd_save(args):
     return run(go, args)
 
 
+def list_snapshots(data_dir):
+    """[(name, manifest)] sorted by name."""
+    root = os.path.join(data_dir, "snapshots")
+    out = []
+    for name in sorted(os.listdir(root)) if os.path.isdir(root) else []:
+        try:
+            out.append((name, load_manifest(data_dir, name)))
+        except SnapshotError:
+            continue  # not a snapshot (e.g. a leftover .tmp dir)
+    return out
+
+
 def cmd_list(args):
     def go(data_dir, args):
-        root = os.path.join(data_dir, "snapshots")
-        rows = []
-        for name in sorted(os.listdir(root)) if os.path.isdir(root) else []:
-            try:
-                m = load_manifest(data_dir, name)
-            except SnapshotError:
-                continue  # not a snapshot (e.g. a leftover .tmp dir)
-            rows.append((name, time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(m.get("created", 0))),
-                         str(m.get("calls", "?")), ", ".join(f["path"] for f in m.get("files", [])) or "-"))
+        rows = [(name, time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(m.get("created", 0))),
+                 str(m.get("calls", "?")), ", ".join(f["path"] for f in m.get("files", [])) or "-")
+                for name, m in list_snapshots(data_dir)]
         if not rows:
             print("No snapshots yet. Create one with: keepstack snapshot save NAME")
             return

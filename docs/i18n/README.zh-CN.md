@@ -79,7 +79,7 @@ VPC、ID、数据都和之前一样。新增一个子网后，
 **1. 安装**
 
 ```sh
-pipx install git+https://github.com/sanlega/keepstack
+pipx install keepstack         # 或：uv tool install keepstack
 ```
 
 **2. 启动**：首次运行会自动构建模拟器镜像，然后恢复你之前保存的状态
@@ -109,6 +109,7 @@ aws sts get-caller-identity    # "Account": "000000000000" → 说明你连上�
 | `keepstack check` | **应用之前：** 列出你的 Terraform 项目中哪些资源能在模拟器上正常工作、哪些已知会出问题（附变通方法），以及你所用每个服务在模拟器上的已知缺陷。若有会失败的项则以退出码 1 结束，因此适合放进 CI。 |
 | `keepstack up -d` / `down` | 在后台运行 / 停止。两种方式下状态都会保留。 |
 | `keepstack status` | 是否在运行？按服务统计已保存多少次调用，以及上次恢复的情况如何。 |
+| `keepstack ui` | 打开 Web 仪表盘：资源、最近的调用、ID 转换和快照。 |
 | `keepstack logs -f` | 持续查看后台日志。 |
 | `keepstack doctor` | 检查 Docker、端口、AWS CLI 版本，并在真实 AWS 凭证可能泄漏到当前会话时发出警告。 |
 | `keepstack snapshot save <name>` | 保存当前状态（加上 `--include terraform.tfstate` 可一并保存你的 Terraform 状态）。另有 `snapshot list`、`restore`、`delete`。 |
@@ -141,6 +142,41 @@ keepstack snapshot save before-upgrade --include terraform.tfstate
 terraform apply                                     # ...结果不理想？
 keepstack down && keepstack snapshot restore before-upgrade && keepstack up -d
 ```
+
+## 仪表盘
+
+`keepstack ui` 会打开一个只读仪表盘，由 keepstack 自己在同一端口上提供。它会根据 journal 显示你的本地 AWS 中存在哪些资源、
+最近的调用（点击某一条可查看请求和响应）、ID 转换以及你的快照。它只在 `127.0.0.1` 上响应。
+
+<p align="center"><img src="../assets/dashboard.png" alt="keepstack dashboard" width="900"></p>
+
+## 在 GitHub Actions 中使用
+
+只需一个步骤，就能让任何工作流拥有本地 AWS。你的 AWS CLI、SDK 和 Terraform 会自动指向它。
+
+```yaml
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: sanlega/keepstack@v0.2.0
+        with:
+          shims: true          # 可选：绕过已知的模拟器缺陷
+          cache: true          # 可选：在多次运行之间保留状态
+      - run: terraform init && terraform apply -auto-approve
+```
+
+| 输入 | 默认值 | 说明 |
+|---|---|---|
+| `shims` | `false` | 等同于 `keepstack up --shims` |
+| `cache` | `false` | 恢复上一次运行的状态，并在作业结束时保存 |
+| `cache-key` | `keepstack` | 缓存键前缀，用于相互独立的环境 |
+| `port` | `9297` | keepstack 监听的端口 |
+| `data-dir` | `.keepstack` | 状态目录 |
+| `python-version` | `3.12` | 用于运行 keepstack 的 Python 版本 |
+
+该 action 需要 Linux runner（支持 Linux 容器的 Docker）。输出：`endpoint-url`。
 
 ## 特性
 
@@ -185,7 +221,8 @@ keepstack up        [-d] [--port 9297] [--emulator-port 9298] [--data-dir .keeps
 keepstack down      [--data-dir]
 keepstack status    [--data-dir] [--json]
 keepstack logs      [--data-dir] [-f]
-keepstack env       [--port 9297] [--shell sh|powershell]
+keepstack env       [--port 9297] [--shell sh|powershell|dotenv]
+keepstack ui        [--port 9297] [--no-browser]
 keepstack check     [PATH] [--plan plan.json] [--offline] [--json]
 keepstack doctor    [--port] [--data-dir]
 keepstack snapshot  save NAME [--include FILE ...] [--force] | list | restore NAME | delete NAME

@@ -77,7 +77,7 @@ Same VPCs, same IDs, same data. Add a subnet and
 **1. Install**
 
 ```sh
-pipx install git+https://github.com/sanlega/keepstack
+pipx install keepstack         # or: uv tool install keepstack
 ```
 
 **2. Start it:** the emulator image is built on first run, then your saved state is restored
@@ -107,6 +107,7 @@ Try the full loop with [`examples/quickstart`](examples/quickstart/main.tf).
 | `keepstack check` | **Before applying:** lists which resources in your Terraform project will work on the emulator, which are known to break (with workarounds) and the emulator's known gaps for each service you use. Exits 1 if something will fail, so it fits in CI. |
 | `keepstack up -d` / `down` | Run in the background / stop it. The state is kept either way. |
 | `keepstack status` | Is it running? How many calls are saved, per service, and how did the last restore go. |
+| `keepstack ui` | Open the web dashboard: resources, recent calls, ID translations and snapshots. |
 | `keepstack logs -f` | Follow the background log. |
 | `keepstack doctor` | Checks Docker, the port, your AWS CLI version and warns if real AWS credentials could leak into your session. |
 | `keepstack snapshot save <name>` | Save the current state (add `--include terraform.tfstate` to save your Terraform state with it). `snapshot list`, `restore`, `delete`. |
@@ -139,6 +140,42 @@ keepstack snapshot save before-upgrade --include terraform.tfstate
 terraform apply                                     # ...didn't go well?
 keepstack down && keepstack snapshot restore before-upgrade && keepstack up -d
 ```
+
+## Dashboard
+
+`keepstack ui` opens a read-only dashboard served by keepstack itself, on the same port. It shows what exists in your
+local AWS according to the journal, the latest calls (click one to see the request and response), the ID
+translations and your snapshots. It only answers on `127.0.0.1`.
+
+<p align="center"><img src="docs/assets/dashboard.png" alt="keepstack dashboard" width="900"></p>
+
+## In GitHub Actions
+
+Give any workflow a local AWS with one step. Your AWS CLI, SDKs and Terraform are pointed at it automatically.
+
+```yaml
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: sanlega/keepstack@v0.2.0
+        with:
+          shims: true          # optional: work around known emulator bugs
+          cache: true          # optional: keep the state between runs
+      - run: terraform init && terraform apply -auto-approve
+```
+
+| Input | Default | Description |
+|---|---|---|
+| `shims` | `false` | Same as `keepstack up --shims` |
+| `cache` | `false` | Restore the state from the previous run and save it at the end of the job |
+| `cache-key` | `keepstack` | Cache key prefix, for independent environments |
+| `port` | `9297` | Port keepstack listens on |
+| `data-dir` | `.keepstack` | State directory |
+| `python-version` | `3.12` | Python used to run keepstack |
+
+The action needs a Linux runner (Docker with Linux containers). Output: `endpoint-url`.
 
 ## Features
 
@@ -183,7 +220,8 @@ keepstack up        [-d] [--port 9297] [--emulator-port 9298] [--data-dir .keeps
 keepstack down      [--data-dir]
 keepstack status    [--data-dir] [--json]
 keepstack logs      [--data-dir] [-f]
-keepstack env       [--port 9297] [--shell sh|powershell]
+keepstack env       [--port 9297] [--shell sh|powershell|dotenv]
+keepstack ui        [--port 9297] [--no-browser]
 keepstack check     [PATH] [--plan plan.json] [--offline] [--json]
 keepstack doctor    [--port] [--data-dir]
 keepstack snapshot  save NAME [--include FILE ...] [--force] | list | restore NAME | delete NAME

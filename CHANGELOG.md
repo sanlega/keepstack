@@ -5,7 +5,15 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-11-12
+
 ### Added
+- `keepstack ui`: read-only web dashboard at `http://127.0.0.1:9297/__keepstack/` with status, calls per service,
+  existing resources, recent calls (request/response), ID translations and snapshots. Localhost only.
+- GitHub Action (`uses: sanlega/keepstack@v0.2.0`): persistent local AWS in any workflow, with optional state cache.
+- `keepstack env --shell dotenv` for `.env` files and `$GITHUB_ENV`.
+- Release automation: tagging `v*` builds the package, publishes it to PyPI (trusted publishing) and creates the
+  GitHub release from this changelog.
 - `keepstack check`: pre-flight compatibility report for a Terraform project (scans `.tf` files or a
   `terraform show -json` plan), with workarounds and the emulator's known gaps per service. Exits 1 if anything will fail.
 - `keepstack up -d`, `down`, `status` and `logs`: run in the background and inspect the state (calls per service,
@@ -33,5 +41,6 @@ All notable changes to this project are documented here. The format follows
 - Automatic build of the emulator image (x86_64 and arm64).
 - Compatibility matrix covering 40+ Terraform resource types.
 
-[Unreleased]: https://github.com/sanlega/keepstack/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/sanlega/keepstack/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/sanlega/keepstack/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/sanlega/keepstack/releases/tag/v0.1.0
