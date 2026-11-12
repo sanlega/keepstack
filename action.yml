@@ -1,0 +1,73 @@
+name: keepstack
+description: Persistent local AWS for your workflows. Runs AWS Emulator behind keepstack and points AWS CLI, SDKs and Terraform at it.
+author: keepstack contributors
+branding:
+  icon: database
+  color: blue
+
+inputs:
+  shims:
+    description: Work around known emulator bugs (keepstack up --shims).
+    default: "false"
+  port:
+    description: Port keepstack listens on.
+    default: "9297"
+  data-dir:
+    description: State directory.
+    default: .keepstack
+  cache:
+    description: Restore the state from a previous run and save it at the end of the job (actions/cache).
+    default: "false"
+  cache-key:
+    description: Cache key prefix. Use different keys for independent environments.
+    default: keepstack
+  python-version:
+    description: Python used to run keepstack.
+    default: "3.12"
+
+outputs:
+  endpoint-url:
+    description: The AWS endpoint served by keepstack.
+    value: ${{ steps.up.outputs.endpoint-url }}
+
+runs:
+  using: composite
+  steps:
+    - name: Check the runner
+      shell: bash
+      run: |
+        if [ "$RUNNER_OS" != "Linux" ]; then
+          echo "::error::keepstack needs Docker with Linux containers: use a Linux runner (e.g. ubuntu-latest)"
+          exit 1
+        fi
+
+    - uses: actions/setup-python@v7
+      with:
+        python-version: ${{ inputs.python-version }}
+
+    - name: Restore keepstack state
+      if: inputs.cache == 'true'
+      uses: actions/cache@v4
+      with:
+        path: ${{ inputs.data-dir }}
+        # A new key per run so the state saved at the end of this job is always the newest one.
+        key: ${{ inputs.cache-key }}-${{ github.run_id }}-${{ github.run_attempt }}
+        restore-keys: ${{ inputs.cache-key }}-
+
+    - name: Install keepstack
+      shell: bash
+      run: pip install --quiet "$GITHUB_ACTION_PATH"
+
+    - name: Start keepstack
+      id: up
+      shell: bash
+      env:
+        PORT: ${{ inputs.port }}
+        DATA_DIR: ${{ inputs.data-dir }}
+        SHIMS: ${{ inputs.shims }}
+      run: |
+        args=(--port "$PORT" --data-dir "$DATA_DIR")
+        [ "$SHIMS" = "true" ] && args+=(--shims)
+        keepstack up -d "${args[@]}"
+        keepstack env --port "$PORT" --shell dotenv >> "$GITHUB_ENV"
+        echo "endpoint-url=http://127.0.0.1:$PORT" >> "$GITHUB_OUTPUT"

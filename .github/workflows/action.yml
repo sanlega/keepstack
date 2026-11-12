@@ -1,0 +1,40 @@
+name: Action
+
+# Exercises the composite action in action.yml the way other repositories use it.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  quickstart:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_wrapper: false
+      - id: keepstack
+        uses: ./
+        with:
+          shims: "true"
+      - name: Apply the quickstart example
+        working-directory: examples/quickstart
+        run: |
+          echo "endpoint: ${{ steps.keepstack.outputs.endpoint-url }}"
+          terraform init -input=false
+          terraform apply -auto-approve -input=false
+          terraform plan -detailed-exitcode -input=false
+      - name: Restart keepstack and check the state survived
+        working-directory: examples/quickstart
+        run: |
+          state="$GITHUB_WORKSPACE/.keepstack"   # where the action started keepstack
+          keepstack down --data-dir "$state"
+          keepstack up -d --shims --data-dir "$state"
+          terraform plan -detailed-exitcode -input=false
+          keepstack status --data-dir "$state"
