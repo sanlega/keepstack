@@ -19,9 +19,9 @@ the emulator container → `keepstack up` (no `--reset`) → `terraform plan` (n
 | `ssm_parameter`, `secretsmanager_secret`, `secretsmanager_secret_version`, `ecr_repository` | ✅ | ✅ | ✅ | OK (secret ARN suffix translated) |
 | `cloudwatch_event_rule`, `cloudwatch_event_target` | ✅ | ✅ | ✅ | OK |
 | `route53_zone`, `route53_record` | ✅ | ✅ | ✅ | OK (zone ID translated) |
-| `security_group` (and `vpc_security_group_*_rule` that depend on it) | ❌ | — | — | **Emulator bug**, see below |
-| `s3_bucket_policy` with `Principal = "*"` | ❌ | — | — | Emulator enforces `BlockPublicPolicy` (likely the same as AWS defaults) |
-| `dynamodb_table` with `PAY_PER_REQUEST` | ✅ | ⚠️ | — | **Emulator bug**, see below |
+| `security_group` (and `vpc_security_group_*_rule` that depend on it) | ❌ | n/a | n/a | **Emulator bug**, see below |
+| `s3_bucket_policy` with `Principal = "*"` | ❌ | n/a | n/a | Emulator enforces `BlockPublicPolicy` (likely the same as AWS defaults) |
+| `dynamodb_table` with `PAY_PER_REQUEST` | ✅ | ⚠️ | n/a | **Emulator bug**, see below |
 
 Not covered yet: actually invoking Lambda functions or running event source mappings, ECS, RDS, ElastiCache,
 CloudFront, Step Functions. Contributions welcome.

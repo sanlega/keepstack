@@ -8,7 +8,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for the layout and [docs/how-it-works.md]
 ## Rules
 - Standard library only. No runtime dependencies.
 - User-facing text, code and comments in English. Translations live in `docs/i18n/`; the English README is the source
-  of truth — update the translations when it changes.
+  of truth; update the translations when it changes.
 - Every behaviour change needs a test; replay/translation bugs need a unit test that reproduces them.
 
 ## Verify

@@ -82,13 +82,13 @@ Mismas VPC, mismos IDs, mismos datos. Añade una subred y
 pipx install git+https://github.com/sanlega/keepstack
 ```
 
-**2. Arráncalo** — la imagen del emulador se construye la primera vez y después se restaura tu estado guardado
+**2. Arráncalo:** la imagen del emulador se construye la primera vez y después se restaura tu estado guardado
 
 ```sh
 keepstack up
 ```
 
-**3. Apunta tus herramientas a keepstack** — en otra terminal
+**3. Apunta tus herramientas a keepstack:** en otra terminal
 
 ```sh
 eval "$(keepstack env)"        # PowerShell: keepstack env --shell powershell | iex

@@ -8,8 +8,8 @@
 <h3 align="center">Your local AWS survives restarts.</h3>
 
 <p align="center">
-  Persistent state for <a href="https://docs.aws.amazon.com/emulator/latest/userguide/what-is-service.html">AWS Emulator</a> —
-  reboot, come back days later, and <code>terraform plan</code> still says <em>No changes</em>.
+  Persistent state for <a href="https://docs.aws.amazon.com/emulator/latest/userguide/what-is-service.html">AWS Emulator</a>.
+  Reboot, come back days later, and <code>terraform plan</code> still says <em>No changes</em>.
 </p>
 
 <p align="center">
@@ -32,7 +32,7 @@
 
 ## The problem
 
-AWS Emulator is AWS's official local emulator — fast and faithful, but **everything lives in memory**.
+AWS Emulator is AWS's official local emulator: fast and faithful, but **everything lives in memory**.
 
 <table>
 <tr>
@@ -80,13 +80,13 @@ Same VPCs, same IDs, same data. Add a subnet and
 pipx install git+https://github.com/sanlega/keepstack
 ```
 
-**2. Start it** — the emulator image is built on first run, then your saved state is restored
+**2. Start it:** the emulator image is built on first run, then your saved state is restored
 
 ```sh
 keepstack up
 ```
 
-**3. Point your tools at it** — in another terminal
+**3. Point your tools at it:** in another terminal
 
 ```sh
 eval "$(keepstack env)"        # PowerShell: keepstack env --shell powershell | iex
@@ -107,7 +107,7 @@ Try the full loop with [`examples/quickstart`](examples/quickstart/main.tf).
 | 🔁 **Survives everything** | Ctrl+C, `docker kill`, Docker restarts, reboots. If the container dies, keepstack restores it on its own. |
 | 🪪 **Stable IDs** | `vpc-…`, KMS UUIDs, Secrets Manager ARNs, Route 53 zone IDs… keep their original values across restarts. |
 | ⚡ **Zero setup** | One command, no config. The emulator image builds itself (x86_64 and Apple silicon). |
-| 🛡️ **Safe by design** | Write-ahead journal, one instance per port — a stray `--reset` can't wipe a running state. |
+| 🛡️ **Safe by design** | Write-ahead journal, one instance per port: a stray `--reset` can't wipe a running state. |
 | 📦 **Zero dependencies** | Pure Python standard library. macOS, Linux and Windows. |
 | ✅ **Tested for real** | 40+ Terraform resource types, end-to-end against a real emulator. [See the matrix →](docs/compatibility.md) |
 
@@ -120,11 +120,11 @@ flowchart LR
     K <--> J[("journal.db<br/>SQLite")]
 ```
 
-1. **Record** — every write is saved to the journal *before* it reaches the emulator. Reads pass straight through.
-2. **Replay** — on start, a clean emulator receives the journal in order (with retries for resources still settling).
-3. **Translate** — new random IDs are mapped back to the originals, so your tools never notice the restart.
+1. **Record:** every write is saved to the journal *before* it reaches the emulator. Reads pass straight through.
+2. **Replay:** on start, a clean emulator receives the journal in order (with retries for resources still settling).
+3. **Translate:** new random IDs are mapped back to the originals, so your tools never notice the restart.
 
-State lives in `.keepstack/` next to where you run it — one state per project, like `.terraform/`.
+State lives in `.keepstack/` next to where you run it, one state per project, like `.terraform/`.
 The full design is in [docs/how-it-works.md](docs/how-it-works.md).
 
 ## Reference
@@ -159,19 +159,19 @@ Run several isolated environments side by side with different `--port`, `--emula
 
 <br>
 
-- **Local development only** — no credential checks, emulator runs with `--auth off`, bound to `127.0.0.1`.
+- **Local development only:** no credential checks, emulator runs with `--auth off`, bound to `127.0.0.1`.
   See [SECURITY.md](SECURITY.md).
-- **It is not AWS** — the emulator doesn't evaluate IAM and its fidelity varies by service.
+- **It is not AWS:** the emulator doesn't evaluate IAM and its fidelity varies by service.
   Known gaps are in the [compatibility matrix](docs/compatibility.md).
-- **Heuristic ID translation** — only values that look generated are learned.
+- **Heuristic ID translation:** only values that look generated are learned.
   Details in [how it works](docs/how-it-works.md#limitations).
-- **The journal only grows** — compact it with `keepstack up --reset` and a fresh `terraform apply`.
+- **The journal only grows:** compact it with `keepstack up --reset` and a fresh `terraform apply`.
 
 </details>
 
 ## Contributing
 
-Issues and PRs are welcome — especially new entries for the [compatibility matrix](docs/compatibility.md).
+Issues and PRs are welcome, especially new entries for the [compatibility matrix](docs/compatibility.md).
 Start with [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License

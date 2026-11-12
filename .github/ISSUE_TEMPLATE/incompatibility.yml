@@ -26,8 +26,8 @@ body:
       label: Does it also fail directly against AWS Emulator, without keepstack?
       description: See "Running a group yourself" in docs/compatibility.md.
       options:
-        - "Yes — it is an emulator issue"
-        - "No — only through keepstack"
+        - "Yes, it is an emulator issue"
+        - "No, only through keepstack"
         - I have not checked
     validations:
       required: true

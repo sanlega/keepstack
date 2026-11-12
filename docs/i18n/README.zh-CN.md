@@ -8,7 +8,7 @@
 <h3 align="center">你的本地 AWS，重启后依然保留。</h3>
 
 <p align="center">
-  为 <a href="https://docs.aws.amazon.com/emulator/latest/userguide/what-is-service.html">AWS Emulator</a> 提供持久化状态——
+  为 <a href="https://docs.aws.amazon.com/emulator/latest/userguide/what-is-service.html">AWS Emulator</a> 提供持久化状态。
   重启电脑，几天后再回来，<code>terraform plan</code> 仍然显示 <em>No changes</em>。
 </p>
 
@@ -34,7 +34,7 @@
 
 ## 问题所在
 
-AWS Emulator 是 AWS 官方提供的本地模拟器——速度快、还原度高，但**所有数据都只保存在内存中**。
+AWS Emulator 是 AWS 官方提供的本地模拟器，速度快、还原度高，但**所有数据都只保存在内存中**。
 
 <table>
 <tr>
@@ -82,13 +82,13 @@ VPC、ID、数据都和之前一样。新增一个子网后，
 pipx install git+https://github.com/sanlega/keepstack
 ```
 
-**2. 启动** — 首次运行会自动构建模拟器镜像，然后恢复你之前保存的状态
+**2. 启动**：首次运行会自动构建模拟器镜像，然后恢复你之前保存的状态
 
 ```sh
 keepstack up
 ```
 
-**3. 让你的工具指向 keepstack** — 在另一个终端中
+**3. 让你的工具指向 keepstack**：在另一个终端中
 
 ```sh
 eval "$(keepstack env)"        # PowerShell: keepstack env --shell powershell | iex
@@ -109,7 +109,7 @@ aws sts get-caller-identity    # "Account": "000000000000" → 说明你连上�
 | 🔁 **任何情况都不丢状态** | Ctrl+C、`docker kill`、Docker 重启、整机重启均可。容器挂掉时，keepstack 会自动将其恢复。 |
 | 🪪 **ID 保持稳定** | `vpc-…`、KMS UUID、Secrets Manager ARN、Route 53 托管区域 ID 等，重启前后保持原值。 |
 | ⚡ **零配置** | 一条命令，无需配置。模拟器镜像会自动构建（x86_64 和 Apple silicon）。 |
-| 🛡️ **设计上就很安全** | 预写式 journal，每个端口只允许一个实例——误敲的 `--reset` 也无法清掉正在运行的状态。 |
+| 🛡️ **设计上就很安全** | 预写式 journal，每个端口只允许一个实例，误敲的 `--reset` 也无法清掉正在运行的状态。 |
 | 📦 **无依赖** | 仅使用 Python 标准库，支持 macOS、Linux 和 Windows。 |
 | ✅ **真实测试** | 40 多种 Terraform 资源类型，针对真实模拟器做端到端测试。[查看矩阵 →](../compatibility.md) |
 
@@ -122,11 +122,11 @@ flowchart LR
     K <--> J[("journal.db<br/>SQLite")]
 ```
 
-1. **记录**——每个写操作都会在到达模拟器*之前*先写入 journal；读请求直接透传。
-2. **重放**——启动时，一个干净的模拟器会按顺序接收 journal 中的操作（对仍在就绪过程中的资源会自动重试）。
-3. **转换**——新生成的随机 ID 会被映射回原始值，因此你的工具完全察觉不到重启。
+1. **记录**：每个写操作都会在到达模拟器*之前*先写入 journal；读请求直接透传。
+2. **重放**：启动时，一个干净的模拟器会按顺序接收 journal 中的操作（对仍在就绪过程中的资源会自动重试）。
+3. **转换**：新生成的随机 ID 会被映射回原始值，因此你的工具完全察觉不到重启。
 
-状态保存在你运行命令所在目录的 `.keepstack/` 中——每个项目一份状态，和 `.terraform/` 类似。
+状态保存在你运行命令所在目录的 `.keepstack/` 中，每个项目一份状态，和 `.terraform/` 类似。
 完整设计请阅读 [docs/how-it-works.md](../how-it-works.md)。
 
 ## 参考
@@ -161,13 +161,13 @@ keepstack --version
 
 <br>
 
-- **仅限本地开发**——不校验凭证，模拟器以 `--auth off` 运行，且只绑定 `127.0.0.1`。
+- **仅限本地开发**：不校验凭证，模拟器以 `--auth off` 运行，且只绑定 `127.0.0.1`。
   参见 [SECURITY.md](../../SECURITY.md)。
-- **它不是 AWS**——模拟器不会评估 IAM，各服务的还原度也参差不齐。
+- **它不是 AWS**：模拟器不会评估 IAM，各服务的还原度也参差不齐。
   已知的缺陷列在[兼容性矩阵](../compatibility.md)中。
-- **ID 转换基于启发式规则**——只有看起来像生成标识符的值才会被学习。
+- **ID 转换基于启发式规则**：只有看起来像生成标识符的值才会被学习。
   详情参见[工作原理](../how-it-works.md#limitations)。
-- **journal 只增不减**——如需压缩，请执行 `keepstack up --reset`，然后重新运行 `terraform apply`。
+- **journal 只增不减**：如需压缩，请执行 `keepstack up --reset`，然后重新运行 `terraform apply`。
 
 </details>
 

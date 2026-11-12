@@ -12,7 +12,7 @@ Terraform / AWS CLI / SDKs ──http──► :9297 keepstack ──https──
 ## Lifecycle
 
 1. `keepstack up` binds its port **first**. If another keepstack already owns it, the new process exits with code 1
-   before touching the journal or Docker — so a mistaken second `keepstack up --reset` cannot wipe a running state.
+   before touching the journal or Docker, so a mistaken second `keepstack up --reset` cannot wipe a running state.
 2. It builds the `keepstack-emulator` image if it does not exist (from the official AWS Emulator package; the
    architecture is picked automatically).
 3. It starts a clean emulator container (`keepstack-<port>`) and **replays** the journal.
