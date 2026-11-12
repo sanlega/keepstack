@@ -17,6 +17,7 @@ import json
 import os
 import random
 import re
+import shutil
 import sqlite3
 import ssl
 import subprocess
@@ -248,6 +249,8 @@ class App:
         with self.db() as db:
             db.execute("delete from journal")
             db.execute("delete from meta")  # also forget settings such as remembered shims
+        # Terraform state written by `keepstack validate` describes resources that no longer exist.
+        shutil.rmtree(os.path.join(self.args.data_dir, "terraform"), ignore_errors=True)
         log("journal cleared (--reset)")
 
     # --- emulator -----------------------------------------------------------

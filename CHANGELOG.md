@@ -5,6 +5,16 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+- `keepstack validate [PATH]`: applies a Terraform directory on keepstack (init, plan, apply, plan again) and reports
+  config errors, emulator gaps (HTTP 501 or known bugs, warnings unless `--strict`) and non-idempotent resources, with
+  file and line. Uses a temporary override file and a local backend inside the data dir, so the user's files and
+  backend are untouched and the next run starts from the previous infrastructure. Lists replacements and destroys
+  (`--fail-on-destroy`), and writes `--json`, `--report` and `--markdown` reports. Works with OpenTofu (`--terraform`).
+
+### Changed
+- `keepstack up --reset` also deletes the Terraform state kept by `keepstack validate`.
+
 ## [0.2.0] - 2026-11-12
 
 ### Added

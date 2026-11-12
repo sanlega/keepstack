@@ -107,6 +107,7 @@ aws sts get-caller-identity    # "Account": "000000000000" → 说明你连上�
 | 命令 | 作用 |
 |---|---|
 | `keepstack check` | **应用之前：** 列出你的 Terraform 项目中哪些资源能在模拟器上正常工作、哪些已知会出问题（附变通方法），以及你所用每个服务在模拟器上的已知缺陷。若有会失败的项则以退出码 1 结束，因此适合放进 CI。 |
+| `keepstack validate` | **在本地真正执行 apply：** 针对 keepstack 运行 `init`、`plan`、`apply` 和第二次 `plan`，并区分配置错误、模拟器缺陷和非幂等资源。不会改动你的文件或后端。失败时以退出码 1 结束。 |
 | `keepstack up -d` / `down` | 在后台运行 / 停止。两种方式下状态都会保留。 |
 | `keepstack status` | 是否在运行？按服务统计已保存多少次调用，以及上次恢复的情况如何。 |
 | `keepstack ui` | 打开 Web 仪表盘：资源、最近的调用、ID 转换和快照。 |
@@ -142,6 +143,33 @@ keepstack snapshot save before-upgrade --include terraform.tfstate
 terraform apply                                     # ...结果不理想？
 keepstack down && keepstack snapshot restore before-upgrade && keepstack up -d
 ```
+
+## 验证 Terraform 项目
+
+`keepstack validate` 无需 AWS 账号即可回答"这次 apply 能成功吗？结果是否干净？"。它会在需要时启动 keepstack，用一个临时的
+override 文件把 Terraform 指向它（你的后端和 `.terraform` 不受影响），执行 apply，再次 plan，并对每个问题分类：
+
+| | 类型 | 是否导致失败？ |
+|---|---|---|
+| ❌ | **配置错误**：AWS 或 provider 拒绝了请求 | 是 |
+| 🔁 | **非幂等**：apply 之后 plan 不为空 | 是 |
+| ⚠️ | **模拟器缺陷**：模拟器未实现该 API（HTTP 501）或存在已知 bug | 仅在 `--strict` 时 |
+
+```console
+$ keepstack validate infra/
+keepstack validate: infra/  ->  PASSED (41.2 s)
+
+steps: init ok, plan ok, apply gap, idempotency skipped
+changes: 6 to add, 0 to change, 0 to replace, 0 to destroy
+
+emulator gap: aws_athena_workgroup.reports (main.tf:42)
+    ... StatusCode: 501, api error NotImplemented: operation ListTagsForResource ...
+    hint: the emulator does not implement this API yet
+```
+
+Terraform 状态保存在 keepstack 数据目录中，因此下一次运行会从上一次留下的基础设施开始：plan 只显示变化的部分，就像真实部署一样。
+替换和销毁会被列出，`--fail-on-destroy` 会把它们视为失败。其他选项：`--json`、`--report FILE`、`--markdown FILE`
+（例如 `$GITHUB_STEP_SUMMARY`）、`--destroy`、`--shims`、`--terraform tofu`。
 
 ## 仪表盘
 
@@ -185,6 +213,7 @@ jobs:
 | 🔁 **任何情况都不丢状态** | Ctrl+C、`docker kill`、Docker 重启、整机重启均可。容器挂掉时，keepstack 会自动将其恢复。 |
 | 🪪 **ID 保持稳定** | `vpc-…`、KMS UUID、Secrets Manager ARN、Route 53 托管区域 ID 等，重启前后保持原值。 |
 | 🔍 **应用前先知道** | `keepstack check` 在你运行 Terraform 之前就告诉你哪些东西会在模拟器上出问题。 |
+| 🧪 **验证拉取请求** | `keepstack validate` 在本地 apply 你的 Terraform，并区分配置错误、模拟器缺陷和非幂等资源。 |
 | 📸 **快照** | 保存、恢复和分享整个环境，包含 Terraform 状态。 |
 | 🩹 **兼容性补丁** | `--shims` 可绕过已知的模拟器缺陷（例如 `aws_security_group`），默认关闭。 |
 | ⚡ **零配置** | 一条命令，无需配置。模拟器镜像会自动构建（x86_64 和 Apple silicon）。 |
