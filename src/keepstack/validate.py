@@ -23,11 +23,18 @@ DESTRUCTIVE = ("replace", "delete")
 TAIL = 4000  # characters of command output kept in the report
 
 
+def relpath(path, start=None):
+    """os.path.relpath, or the absolute path when there is no relative one (another Windows drive, or outside)."""
+    try:
+        rel = os.path.relpath(os.path.abspath(path), start)
+    except ValueError:  # Windows: path and start on different drives
+        return os.path.abspath(path)
+    return os.path.abspath(path) if rel.startswith("..") else rel
+
+
 def state_key(path):
     """Stable per-directory name, so several Terraform roots can share one data dir."""
-    rel = os.path.relpath(os.path.abspath(path))
-    if rel.startswith(".."):
-        rel = os.path.abspath(path)
+    rel = relpath(path)
     return re.sub(r"[^A-Za-z0-9_.-]+", "_", rel.replace(os.sep, "/")).strip("_.") or "root"
 
 

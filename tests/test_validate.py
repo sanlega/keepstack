@@ -65,6 +65,12 @@ class Parsing(unittest.TestCase):
         self.assertEqual(v.state_key(os.path.join("infra", "prod env")), "infra_prod_env")
         self.assertEqual(v.state_key("."), "root")
 
+    def test_state_key_survives_another_windows_drive(self):
+        # GitHub's Windows runners keep the checkout on D: and temp files on C:, where relpath raises.
+        with mock.patch.object(v.os.path, "relpath", side_effect=ValueError("path is on mount 'C:'")):
+            self.assertTrue(v.state_key("somewhere"))
+            self.assertEqual(v.relpath("x"), os.path.abspath("x"))
+
     def test_locate_finds_root_resources_only(self):
         d = tempfile.mkdtemp()
         self.addCleanup(shutil.rmtree, d)
