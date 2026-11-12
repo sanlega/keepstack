@@ -24,6 +24,7 @@ import sys
 import threading
 import time
 import urllib.parse
+from contextlib import contextmanager
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 from . import dashboard, shims
@@ -44,6 +45,18 @@ REQUEST_ID_KEYS = {b"requestid", b"request_id", b"x-amz-request-id", b"x-amzn-re
 READY_TIMEOUT = 300
 REPLAY_RETRY_SECONDS = 30  # replay is faster than AWS: e.g. PutItem before the table is ACTIVE
 MAX_ALIGN_TOKENS = 4000    # difflib is quadratic: above this, match by position only
+
+
+@contextmanager
+def connect(*args, **kwargs):
+    """sqlite3 connection that commits (or rolls back) AND closes: `with sqlite3.connect()` alone never closes,
+    which keeps the file locked on Windows."""
+    db = sqlite3.connect(*args, **kwargs)
+    try:
+        with db:
+            yield db
+    finally:
+        db.close()
 
 
 def log(msg):
@@ -220,7 +233,7 @@ class App:
         self.ctx.verify_mode = ssl.CERT_NONE  # the emulator's self-signed certificate, only on 127.0.0.1
 
     def db(self):
-        return sqlite3.connect(self.db_path, timeout=30)
+        return connect(self.db_path, timeout=30)
 
     def get_meta(self, key, default=None):
         with self.db() as db:

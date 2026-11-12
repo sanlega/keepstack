@@ -46,7 +46,7 @@ def _error(status, reason, msg):
 
 
 def _ro(db_path):
-    return sqlite3.connect(Path(db_path).resolve().as_uri() + "?mode=ro", uri=True, timeout=5)
+    return proxy.connect(Path(db_path).resolve().as_uri() + "?mode=ro", uri=True, timeout=5)
 
 
 def _version_key(db):
