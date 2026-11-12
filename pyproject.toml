@@ -1,0 +1,47 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "keepstack"
+dynamic = ["version"]
+description = "Persistent state for AWS Emulator: your local AWS infrastructure survives restarts."
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "Apache-2.0" }
+authors = [{ name = "keepstack contributors" }]
+keywords = ["aws", "emulator", "terraform", "localstack", "local-development", "testing", "infrastructure-as-code"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: Apache Software License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Topic :: Software Development :: Testing",
+    "Topic :: System :: Systems Administration",
+]
+dependencies = []
+
+[project.urls]
+Homepage = "https://github.com/sanlega/keepstack"
+Documentation = "https://github.com/sanlega/keepstack/tree/main/docs"
+Issues = "https://github.com/sanlega/keepstack/issues"
+Changelog = "https://github.com/sanlega/keepstack/blob/main/CHANGELOG.md"
+
+[project.scripts]
+keepstack = "keepstack.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+keepstack = ["Dockerfile"]
+
+[tool.setuptools.dynamic]
+version = { attr = "keepstack.__version__" }
+
+[tool.ruff]
+line-length = 120
+target-version = "py39"

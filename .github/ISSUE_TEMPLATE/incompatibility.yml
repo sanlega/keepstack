@@ -1,0 +1,41 @@
+name: Resource incompatibility
+description: A Terraform resource or AWS API call does not work, or does not survive a restart
+labels: [compatibility]
+body:
+  - type: input
+    id: resource
+    attributes:
+      label: Resource or API call
+      placeholder: aws_security_group / ec2:RevokeSecurityGroupEgress
+    validations:
+      required: true
+  - type: dropdown
+    id: stage
+    attributes:
+      label: Where does it fail?
+      options:
+        - terraform apply
+        - terraform plan right after apply (perpetual diff)
+        - After restarting keepstack (state not restored)
+        - terraform destroy
+    validations:
+      required: true
+  - type: dropdown
+    id: direct
+    attributes:
+      label: Does it also fail directly against AWS Emulator, without keepstack?
+      description: See "Running a group yourself" in docs/compatibility.md.
+      options:
+        - "Yes — it is an emulator issue"
+        - "No — only through keepstack"
+        - I have not checked
+    validations:
+      required: true
+  - type: textarea
+    id: details
+    attributes:
+      label: Config and error
+      description: Minimal Terraform config, the exact error and the keepstack log.
+      render: text
+    validations:
+      required: true
