@@ -69,7 +69,8 @@ class Daemon(unittest.TestCase):
         self.assertFalse(daemon.collect_status(self.dir)["running"])
         with mock.patch.object(daemon.os, "kill") as kill:
             self.assertEqual(daemon.cmd_down(Namespace(data_dir=self.dir)), 0)
-        kill.assert_not_called()
+        # os.kill(pid, 0) is only pid_alive() probing on POSIX; any other signal would hit the unrelated process.
+        self.assertEqual([c for c in kill.call_args_list if c.args[1] != 0], [])
         self.assertIsNone(daemon.read_run(self.dir))
 
     def test_down_without_run_file_is_noop(self):
