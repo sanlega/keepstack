@@ -1,4 +1,5 @@
 """`keepstack check`: pre-flight report of which Terraform resources will work on the emulator."""
+import gzip
 import json
 import os
 import re
@@ -6,6 +7,7 @@ import sys
 import urllib.request
 from collections import Counter
 
+RELEASE_URL = "https://api.github.com/repos/aws/aws-emulator/releases/latest"
 ISSUES_URL = "https://api.github.com/repos/aws/aws-emulator/contents/issues/things-that-do-not-work"
 RESOURCE_RE = re.compile(r'resource\s+"(aws_[a-z0-9_]+)"\s+"([^"]+)"')
 MODULE_RE = re.compile(r'^\s*module\s+"([^"]+)"\s*\{(.*?)^\s*\}', re.DOTALL | re.MULTILINE)
@@ -76,6 +78,72 @@ def scan_plan(path):
     return Counter(r["type"] for r in rs if r.get("type", "").startswith("aws_")), []
 
 
+# keepstack service name (see service_of) -> namespace of the service in the emulator's fidelity data.
+FIDELITY_NAMESPACES = {"logs": "cloudwatchlogs", "events": "eventbridge", "cognito": "cognitoidentityprovider",
+                       "lb": "elasticloadbalancingv2", "alb": "elasticloadbalancingv2", "elb": "elasticloadbalancing",
+                       "db": "rds", "msk": "kafka", "appautoscaling": "applicationautoscaling",
+                       "elasticsearch": "elasticsearchservice", "service": "servicediscovery", "default": "ec2"}
+
+
+def summarize_scores(data):
+    """The emulator's scores.json (one entry per fidelity test) -> {namespace: [passed, total]}.
+    Only single-service tests count, like the per-service scores AWS publishes; skipped tests are left out."""
+    services = {}
+    for unit in data.get("units", []):
+        if len(unit.get("services", [])) != 1 or unit.get("outcome") not in ("pass", "fail"):
+            continue
+        ns = unit["services"][0].split("#")[0].removeprefix("com.amazonaws.")
+        score = services.setdefault(ns, [0, 0])
+        score[0] += unit["outcome"] == "pass"
+        score[1] += 1
+    return dict(sorted(services.items()))
+
+
+def load_fidelity():
+    with open(os.path.join(os.path.dirname(__file__), "fidelity.json"), encoding="utf-8") as fh:
+        return json.load(fh)
+
+
+def cache_dir():
+    base = os.environ.get("XDG_CACHE_HOME") or (os.environ.get("LOCALAPPDATA") if os.name == "nt" else None)
+    return os.path.join(base or os.path.join(os.path.expanduser("~"), ".cache"), "keepstack")
+
+
+def _get(url, timeout=30):
+    req = urllib.request.Request(url, headers={"User-Agent": "keepstack", "Accept": "application/vnd.github+json"})
+    with urllib.request.urlopen(req, timeout=timeout) as r:
+        return r.read()
+
+
+def fetch_fidelity(cache=None):
+    """Fidelity data of the newest emulator release, downloaded once per release and cached."""
+    release = json.loads(_get(RELEASE_URL, timeout=10))
+    version = release["tag_name"].lstrip("v")
+    path = os.path.join(cache or cache_dir(), f"fidelity-{version}.json")
+    if os.path.exists(path):
+        with open(path, encoding="utf-8") as fh:
+            return json.load(fh)
+    asset = next(a for a in release["assets"] if a["name"] == "scores.json.gz")
+    data = json.loads(gzip.decompress(_get(asset["browser_download_url"])))
+    fid = {"emulator_version": version, "scored_at": data.get("scoredAt"), "services": summarize_scores(data)}
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w", encoding="utf-8") as fh:
+        json.dump(fid, fh)
+    return fid
+
+
+def fidelity_for(services, fid):
+    """-> {service: {"namespace", "passed", "total", "score"}} for the services that have fidelity data."""
+    out = {}
+    for svc in sorted(services):
+        ns = FIDELITY_NAMESPACES.get(svc, svc)
+        if ns in fid["services"]:
+            passed, total = fid["services"][ns]
+            out[svc] = {"namespace": ns, "passed": passed, "total": total,
+                        "score": round(100 * passed / total) if total else None}
+    return out
+
+
 def load_compat():
     with open(os.path.join(os.path.dirname(__file__), "compat.json"), encoding="utf-8") as fh:
         return json.load(fh)
@@ -111,7 +179,7 @@ def known_gaps(services, fetch):
     return gaps, None
 
 
-def build_report(args, fetch=None):
+def build_report(args, fetch=None, fetch_scores=None):
     if not args.plan and not os.path.isdir(args.path):
         raise OSError(f"not a directory: {args.path}")
     counts, remote = scan_plan(args.plan) if args.plan else scan_dir(args.path)
@@ -125,8 +193,17 @@ def build_report(args, fetch=None):
               "emulator_version": compat["emulator_version"], "resources": resources,
               "modules_not_analysed": [{"name": n, "source": s} for n, s in remote],
               "gaps": None, "gaps_note": None}
+    services = {r["service"] for r in resources}
     if not args.offline:
-        report["gaps"], report["gaps_note"] = known_gaps({r["service"] for r in resources}, fetch or fetch_issue_names)
+        report["gaps"], report["gaps_note"] = known_gaps(services, fetch or fetch_issue_names)
+    fid, source = load_fidelity(), "bundled"
+    if not args.offline:
+        try:
+            fid, source = (fetch_scores or fetch_fidelity)(), "latest release"
+        except Exception as e:  # noqa: BLE001 - offline, rate limits: the bundled data is still useful
+            report["gaps_note"] = report["gaps_note"] or f"could not fetch the latest fidelity data ({type(e).__name__})"
+    report["fidelity"] = {"emulator_version": fid["emulator_version"], "scored_at": fid.get("scored_at"),
+                          "source": source, "services": fidelity_for(services, fid)}
     summary = dict.fromkeys(STATUS_ORDER, 0)
     for r in resources:
         summary[r["status"]] += r["count"]
@@ -148,6 +225,14 @@ def render(rep):
             out.append(f"    {r['type']:<{width}}  x{r['count']}" + (f"  {r['note']}" if r["note"] else ""))
             if r["workaround"]:
                 out.append(f"    {'':<{width}}  workaround: {r['workaround']}")
+        out.append("")
+    fid = rep.get("fidelity") or {}
+    if fid.get("services"):
+        out.append(f"Emulator fidelity for the services you use (official AWS tests, emulator "
+                   f"{fid['emulator_version']}, {fid['source']}):")
+        rows = sorted(fid["services"].items(), key=lambda kv: (kv[1]["score"] is None, kv[1]["score"] or 0))
+        width = max(len(svc) for svc, _ in rows)
+        out += [f"    {svc:<{width}}  {f['score']:>3}%  ({f['passed']}/{f['total']} tests)" for svc, f in rows]
         out.append("")
     if rep["modules_not_analysed"]:
         out.append("Modules not analysed (remote source; use --plan to include them):")

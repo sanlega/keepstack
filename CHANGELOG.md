@@ -12,6 +12,9 @@ All notable changes to this project are documented here. The format follows
 ### Added
 - pre-commit hook `keepstack-check` (`.pre-commit-hooks.yaml`): runs `keepstack check --offline` when `.tf` files
   change. No Docker or network needed.
+- `keepstack check` shows the official fidelity score of every service you use (passed / total of the AWS Emulator
+  fidelity tests), from the newest emulator release when online (downloaded once per release and cached) or from a
+  bundled copy with `--offline`. `scripts/update_fidelity.py` refreshes the bundled copy.
 
 ### Added
 - `keepstack validate [PATH]`: applies a Terraform directory on keepstack (init, plan, apply, plan again) and reports

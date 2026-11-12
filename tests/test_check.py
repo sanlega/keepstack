@@ -96,16 +96,17 @@ class CheckTests(unittest.TestCase):
         def boom():
             raise OSError("offline")
         write(self.root, "main.tf", TF)
-        rep = check.build_report(args(self.root, offline=False), fetch=boom)
+        rep = check.build_report(args(self.root, offline=False), fetch=boom, fetch_scores=boom)
         self.assertIsNone(rep["gaps"])
         self.assertIn("offline", rep["gaps_note"])
+        self.assertEqual(rep["fidelity"]["source"], "bundled")  # still useful without the network
 
     def test_offline_never_fetches(self):
         write(self.root, "main.tf", TF)
 
         def boom():
             raise AssertionError("network used")
-        rep = check.build_report(args(self.root, offline=True), fetch=boom)
+        rep = check.build_report(args(self.root, offline=True), fetch=boom, fetch_scores=boom)
         self.assertIsNone(rep["gaps"])
         self.assertIsNone(rep["gaps_note"])
 
@@ -116,7 +117,7 @@ class CheckTests(unittest.TestCase):
         self.assertEqual(code, 1)
         self.assertEqual(data["summary"]["broken"], 1)
         self.assertEqual(set(data), {"source", "path", "emulator_version", "resources", "modules_not_analysed",
-                                     "gaps", "gaps_note", "summary"})
+                                     "gaps", "gaps_note", "summary", "fidelity"})
 
     def test_exit_zero_and_human_output(self):
         write(self.root, "main.tf", TF)
@@ -128,6 +129,61 @@ class CheckTests(unittest.TestCase):
     def test_missing_path(self):
         with contextlib.redirect_stderr(io.StringIO()):
             self.assertEqual(check.cmd_check(args(os.path.join(self.root, "nope"))), 2)
+
+
+UNITS = {"scoredAt": "2026-11-12T00:00:00Z", "units": [
+    {"services": ["com.amazonaws.sqs#AmazonSQS"], "outcome": "pass"},
+    {"services": ["com.amazonaws.sqs#AmazonSQS"], "outcome": "fail"},
+    {"services": ["com.amazonaws.sqs#AmazonSQS"], "outcome": "skipped"},
+    {"services": ["com.amazonaws.cloudwatchlogs#Logs_20140328"], "outcome": "pass"},
+    {"services": ["com.amazonaws.sqs#AmazonSQS", "com.amazonaws.sns#AmazonSNS"], "outcome": "fail"},
+]}
+
+
+class FidelityTests(unittest.TestCase):
+    def test_summarize_counts_single_service_tests_and_skips_skipped(self):
+        self.assertEqual(check.summarize_scores(UNITS), {"cloudwatchlogs": [1, 1], "sqs": [1, 2]})
+
+    def test_fidelity_for_maps_keepstack_service_names(self):
+        fid = {"services": {"cloudwatchlogs": [3, 4], "sqs": [1, 2], "rds": [0, 0]}}
+        out = check.fidelity_for({"logs", "sqs", "db", "nothing"}, fid)
+        self.assertEqual(out["logs"], {"namespace": "cloudwatchlogs", "passed": 3, "total": 4, "score": 75})
+        self.assertEqual(out["db"]["score"], None)
+        self.assertNotIn("nothing", out)
+
+    def test_bundled_data_covers_the_common_services(self):
+        fid = check.load_fidelity()
+        self.assertRegex(fid["emulator_version"], r"^\d+\.\d+\.\d+$")
+        for ns in ("ec2", "sqs", "s3", "dynamodb", "iam", "cloudwatchlogs"):
+            self.assertIn(ns, fid["services"])
+
+    def test_fetch_downloads_once_per_release(self):
+        import gzip
+        from unittest import mock
+        calls = []
+
+        def fake_get(url, timeout=30):
+            calls.append(url)
+            if url == check.RELEASE_URL:
+                return json.dumps({"tag_name": "v9.9.9", "assets": [
+                    {"name": "scores.json.gz", "browser_download_url": "https://example/scores.json.gz"}]}).encode()
+            return gzip.compress(json.dumps(UNITS).encode())
+
+        with tempfile.TemporaryDirectory() as cache, mock.patch.object(check, "_get", fake_get):
+            first = check.fetch_fidelity(cache=cache)
+            second = check.fetch_fidelity(cache=cache)
+        self.assertEqual(first, second)
+        self.assertEqual(first["emulator_version"], "9.9.9")
+        self.assertEqual(calls.count("https://example/scores.json.gz"), 1)
+
+    def test_report_and_render_use_the_fetched_data(self):
+        with tempfile.TemporaryDirectory() as root:
+            write(root, "main.tf", 'resource "aws_sqs_queue" "q" {}\n')
+            fid = {"emulator_version": "9.9.9", "scored_at": None, "services": {"sqs": [1, 2]}}
+            rep = check.build_report(args(root, offline=False), fetch=list, fetch_scores=lambda: fid)
+        self.assertEqual(rep["fidelity"]["source"], "latest release")
+        self.assertEqual(rep["fidelity"]["services"]["sqs"]["score"], 50)
+        self.assertIn("sqs   50%  (1/2 tests)", check.render(rep))
 
 
 if __name__ == "__main__":
