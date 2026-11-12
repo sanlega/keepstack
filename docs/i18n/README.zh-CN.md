@@ -5,11 +5,12 @@
   </picture>
 </p>
 
-<h3 align="center">你的本地 AWS，重启后依然保留。</h3>
+<h3 align="center">在 Terraform 触及真实 AWS 之前，先在本地 AWS 上测试。</h3>
 
 <p align="center">
-  为 <a href="https://docs.aws.amazon.com/emulator/latest/userguide/what-is-service.html">AWS Emulator</a> 提供持久化状态。
-  重启电脑，几天后再回来，<code>terraform plan</code> 仍然显示 <em>No changes</em>。
+  keepstack 让官方 <a href="https://docs.aws.amazon.com/emulator/latest/userguide/what-is-service.html">AWS Emulator</a> 拥有记忆。
+  本地基础设施在重启后保留，ID 不变；每个拉取请求都在 <code>main</code> 已构建的环境之上执行 apply。
+  无需 AWS 账号，无需令牌。
 </p>
 
 <p align="center">
@@ -21,6 +22,7 @@
 
 <p align="center">
   <a href="#快速开始">快速开始</a> ·
+  <a href="#验证拉取请求">验证拉取请求</a> ·
   <a href="../how-it-works.md">工作原理</a> ·
   <a href="../compatibility.md">兼容性</a> ·
   <a href="../../CONTRIBUTING.md">参与贡献</a>
@@ -31,6 +33,33 @@
 <p align="center"><em>如与本译文存在出入，以英文 README 为准。</em></p>
 
 <br>
+
+## 两种用法
+
+<table>
+<tr>
+<th width="50%">💻 在你的电脑上</th>
+<th width="50%">🔁 在每个拉取请求中</th>
+</tr>
+<tr>
+<td>
+
+拥有记忆的官方 AWS Emulator。执行 apply、重启电脑、几天后再回来：`terraform plan` 仍然显示 *No changes*，VPC ID、ARN
+和数据都不变。新增一个资源，plan 就只显示这一个。
+
+**→ [快速开始](#快速开始)**
+
+</td>
+<td>
+
+GitHub Actions 中的一个步骤会在 `main` 已构建的环境之上 apply 拉取请求，并在 PR 中评论增量 plan 和每个问题：配置错误、
+模拟器缺陷、非幂等资源。
+
+**→ [验证拉取请求](#验证拉取请求)**
+
+</td>
+</tr>
+</table>
 
 ## 问题所在
 
@@ -101,6 +130,72 @@ aws sts get-caller-identity    # "Account": "000000000000" → 说明你连上�
 > [!IMPORTANT]
 > 请使用 **AWS CLI v2**：v1 对部分服务（例如 SQS）会忽略 `AWS_ENDPOINT_URL`，请求会被发往真实的 AWS。
 > 在 Terraform 中，请复制[快速开始示例](../../examples/quickstart/main.tf)里的 `provider` 配置块。
+
+## 验证拉取请求
+
+
+只需一个步骤，每个涉及基础设施的拉取请求都会在官方 AWS Emulator 上执行 apply，无需 AWS 账号或令牌：
+
+```yaml
+# .github/workflows/infra.yml
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write   # 用于 PR 评论
+    steps:
+      - uses: actions/checkout@v7
+      - uses: sanlega/keepstack@v0.3.0
+        with:
+          validate: infra/            # 你的 Terraform 目录
+          baseline: true              # 在 main 的环境之上验证 PR
+          shims: true
+          run: pytest tests/smoke     # 可选：检查资源是否真的可用
+```
+
+- **作业摘要和一条固定的 PR 评论**，包含 plan、各个步骤以及发现的每个问题。
+- 在出错的 `.tf` 行上显示**行内注释**。
+- **基线：** 推送到 `main` 时保存得到的环境；拉取请求会恢复它并在其之上执行 apply，因此报告显示的是真实的增量 plan
+  （替换、销毁、`moved` 块），而不是从零开始的 apply。其他本地模拟器每次运行都从空账号开始。
+
+它在拉取请求中留下的评论（这次发现了一次替换和一个非幂等资源）：
+
+
+> ### keepstack validate: `infra` ❌ failed
+>
+> | Step | Result |
+> |---|---|
+> | init | ✅ ok |
+> | plan | ✅ ok |
+> | apply | ✅ ok |
+> | idempotency | ❌ failed |
+> | smoke | ✅ ok |
+>
+> **Plan:** 1 to add, 1 to change, 1 to replace, 0 to destroy
+>
+> > [!WARNING]
+> > Destructive changes:
+> > - `aws_sqs_queue.jobs` will be **replaced**
+>
+> | | Kind | Resource | Message |
+> |---|---|---|---|
+> | 🔁 | not idempotent | `aws_dynamodb_table.items` `main.tf:58` | plan is not empty after apply (update)<br>*Hint:* keepstack up --shims, or lifecycle { ignore_changes = [on_demand_throughput] } |
+>
+> <details><summary>Planned changes</summary>
+>
+> - `create` aws_subnet.b
+> - `replace` aws_sqs_queue.jobs
+> - `update` aws_dynamodb_table.items
+>
+> </details>
+>
+> <sub>keepstack · 52.3 s · AWS Emulator, no AWS account used</sub>
 
 ## 常用命令
 
@@ -202,39 +297,9 @@ Terraform output（`TF_OUTPUT_<name>`），退出码非零则验证失败。在 
 
 ## 在 GitHub Actions 中使用
 
-### 验证每一个拉取请求
-
-只需一个步骤，每个涉及基础设施的拉取请求都会在官方 AWS Emulator 上执行 apply，无需 AWS 账号或令牌：
-
-```yaml
-# .github/workflows/infra.yml
-on:
-  push:
-    branches: [main]
-  pull_request:
-
-jobs:
-  validate:
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      pull-requests: write   # 用于 PR 评论
-    steps:
-      - uses: actions/checkout@v7
-      - uses: sanlega/keepstack@v0.3.0
-        with:
-          validate: infra/            # 你的 Terraform 目录
-          baseline: true              # 在 main 的环境之上验证 PR
-          shims: true
-          run: pytest tests/smoke     # 可选：检查资源是否真的可用
-```
-
-- **作业摘要和一条固定的 PR 评论**，包含 plan、各个步骤以及发现的每个问题。
-- 在出错的 `.tf` 行上显示**行内注释**。
-- **基线：** 推送到 `main` 时保存得到的环境；拉取请求会恢复它并在其之上执行 apply，因此报告显示的是真实的增量 plan
-  （替换、销毁、`moved` 块），而不是从零开始的 apply。其他本地模拟器每次运行都从空账号开始。
-
 ### 只需要一个本地 AWS
+
+拉取请求验证见[上文](#验证拉取请求)。
 
 不设置 `validate` 时，该 action 只启动 keepstack，并让 AWS CLI、SDK 和 Terraform 指向它：
 
@@ -268,10 +333,11 @@ Linux runner（支持 Linux 容器的 Docker），如果 runner 上没有 Terraf
 
 | | |
 |---|---|
+| 🧪 **验证拉取请求** | `keepstack validate` 在本地 apply 你的 Terraform，并区分配置错误、模拟器缺陷和非幂等资源，精确到文件和行号。 |
+| 🧱 **增量验证，与生产一致** | 拉取请求在 `main` 的环境之上 apply，替换和销毁在到达 AWS 之前就会显现。 |
 | 🔁 **任何情况都不丢状态** | Ctrl+C、`docker kill`、Docker 重启、整机重启均可。容器挂掉时，keepstack 会自动将其恢复。 |
 | 🪪 **ID 保持稳定** | `vpc-…`、KMS UUID、Secrets Manager ARN、Route 53 托管区域 ID 等，重启前后保持原值。 |
 | 🔍 **应用前先知道** | `keepstack check` 在你运行 Terraform 之前就告诉你哪些东西会在模拟器上出问题。 |
-| 🧪 **验证拉取请求** | `keepstack validate` 在本地 apply 你的 Terraform，并区分配置错误、模拟器缺陷和非幂等资源。 |
 | 📸 **快照** | 保存、恢复和分享整个环境，包含 Terraform 状态。 |
 | 🩹 **兼容性补丁** | `--shims` 可绕过已知的模拟器缺陷（例如 `aws_security_group`），默认关闭。 |
 | ⚡ **零配置** | 一条命令，无需配置。模拟器镜像会自动构建（x86_64 和 Apple silicon）。 |
