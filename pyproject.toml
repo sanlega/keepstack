@@ -7,7 +7,7 @@ name = "keepstack"
 dynamic = ["version"]
 description = "Persistent state for AWS Emulator: your local AWS infrastructure survives restarts."
 readme = "README.md"
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 license = { text = "Apache-2.0" }
 authors = [{ name = "keepstack contributors" }]
 keywords = ["aws", "emulator", "terraform", "localstack", "local-development", "testing", "infrastructure-as-code"]
@@ -44,4 +44,4 @@ version = { attr = "keepstack.__version__" }
 
 [tool.ruff]
 line-length = 120
-target-version = "py39"
+target-version = "py310"

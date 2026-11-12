@@ -13,7 +13,7 @@
 <p align="center">
   <a href="https://github.com/sanlega/keepstack/actions/workflows/ci.yml"><img src="https://github.com/sanlega/keepstack/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <a href="../../LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-blue.svg" alt="License: Apache-2.0"></a>
-  <img src="https://img.shields.io/badge/python-3.9%2B-blue.svg" alt="Python 3.9+">
+  <img src="https://img.shields.io/badge/python-3.10%2B-blue.svg" alt="Python 3.10+">
   <img src="https://img.shields.io/badge/dependencies-none-brightgreen.svg" alt="No dependencies">
 </p>
 
@@ -58,7 +58,7 @@ Plan: 1 to add, 0 to change, 0 to destroy.
 
 ## 安装
 
-环境要求：[Docker](https://docs.docker.com/get-docker/) 和 Python 3.9+。
+环境要求：[Docker](https://docs.docker.com/get-docker/) 和 Python 3.10+。
 
 ```sh
 pipx install git+https://github.com/sanlega/keepstack
