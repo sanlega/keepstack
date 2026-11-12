@@ -37,6 +37,8 @@ All notable changes to this project are documented here. The format follows
 - Secrets Manager ARNs whose random suffix came out in a single case (`demo-db-password-SGAEFE`) were not translated
   after a restart, so Terraform saw the secret as deleted. With emulator 1.0.337 it happened in 2 of 3 CI runs
   (`SGAEFE`, `ctksym`).
+- Action baseline: the cache no longer includes the Terraform providers kept in `<data-dir>/cache` (125 MiB for the
+  AWS provider); only the journal and the Terraform state are saved.
 
 ## [0.2.0] - 2026-11-12
 

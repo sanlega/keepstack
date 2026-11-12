@@ -89,8 +89,9 @@ runs:
       if: inputs.baseline == 'true'
       uses: actions/cache/restore@v4
       with:
+        # Entries, not the directory: actions/cache hands directories to tar whole, exclusions included.
         path: |
-          ${{ inputs.data-dir }}
+          ${{ inputs.data-dir }}/*
           !${{ inputs.data-dir }}/cache
         key: ${{ inputs.cache-key }}-baseline-${{ github.run_id }}-${{ github.run_attempt }}
         restore-keys: ${{ inputs.cache-key }}-baseline-
@@ -185,8 +186,9 @@ runs:
         github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
       uses: actions/cache/save@v4
       with:
+        # Entries, not the directory: actions/cache hands directories to tar whole, exclusions included.
         path: |
-          ${{ inputs.data-dir }}
+          ${{ inputs.data-dir }}/*
           !${{ inputs.data-dir }}/cache
         key: ${{ inputs.cache-key }}-baseline-${{ github.run_id }}-${{ github.run_attempt }}
 
