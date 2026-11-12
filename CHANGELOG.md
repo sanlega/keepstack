@@ -27,6 +27,9 @@ All notable changes to this project are documented here. The format follows
 ### Changed
 - `--reset` also forgets per-state settings (such as remembered shims).
 
+### Fixed
+- SQLite connections are now closed after use; they kept `journal.db` locked on Windows.
+
 ## [0.1.0] - 2026-11-12
 
 ### Added
