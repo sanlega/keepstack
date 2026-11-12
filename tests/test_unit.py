@@ -4,7 +4,7 @@ import time
 import unittest
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "src"))
-from keepstack.cli import IdMap, is_write, operation
+from keepstack.proxy import IdMap, is_write, operation
 
 
 class TestClassify(unittest.TestCase):
