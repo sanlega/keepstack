@@ -100,6 +100,14 @@ def id_like(tok):
     return b"-" in tok and len(tail) >= 6 and tail.lower() != tail and tail.upper() != tail
 
 
+def same_name_new_suffix(a, b):
+    """db-pass-SGAEFE vs db-pass-xkqwpe: same name, regenerated random suffix. id_like() cannot tell a single-case
+    suffix from a word (app-STAGING), but a pair whose only difference is that suffix is a generated value."""
+    pa, _, ta = a.rpartition(b"-")
+    pb, _, tb = b.rpartition(b"-")
+    return bool(pa) and pa == pb and ta != tb and len(ta) == len(tb) >= 6 and ta.isalnum() and tb.isalnum()
+
+
 def b64_blobs(data):
     return [m for m in B64_RE.findall(data) if b"+" in m or m.endswith(b"=")]
 
@@ -142,7 +150,8 @@ class IdMap:
         else:
             pairs = []
         for i, j in pairs:
-            if not (i and a[i - 1].lower() in REQUEST_ID_KEYS) and id_like(a[i]) and id_like(b[j]):
+            if not (i and a[i - 1].lower() in REQUEST_ID_KEYS) and (
+                    (id_like(a[i]) and id_like(b[j])) or same_name_new_suffix(a[i], b[j])):
                 learned += self._learn_pair(a[i], b[j])
         return learned
 

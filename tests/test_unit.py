@@ -56,6 +56,22 @@ class TestIdMap(unittest.TestCase):
                          b"/2013-04-01/hostedzone/ZQ1W2E3R4T5Y6U7/rrset")
         self.assertEqual(m.to_client(b"secret:db-pass-AbCdEf"), b"secret:db-pass-9xGQim")
 
+    def test_secret_suffix_in_a_single_case(self):  # regression #24: SGAEFE was not translated after a restart
+        for old, new in ((b"SGAEFE", b"xyMnNw"), (b"AbCdEf", b"qwerty"), (b"qwerty", b"ZXCVBN")):
+            m = IdMap()
+            m.learn(b'{"ARN":"arn:aws:secretsmanager:us-east-1:0:secret:demo-db-password-%s","Name":"demo"}' % old,
+                    b'{"ARN":"arn:aws:secretsmanager:us-east-1:0:secret:demo-db-password-%s","Name":"demo"}' % new)
+            self.assertEqual(m.to_emulator(b"SecretId=demo-db-password-" + old), b"SecretId=demo-db-password-" + new)
+            self.assertEqual(m.to_client(b"secret:demo-db-password-" + new), b"secret:demo-db-password-" + old)
+
+    def test_status_changes_are_not_suffixes(self):
+        # Recorded and replayed responses answer the same request, so names match; what changes between them is
+        # generated values and statuses. Statuses use underscores or have a different length.
+        m = IdMap()
+        m.learn(b'{"StackStatus":"CREATE_IN_PROGRESS","State":"in-progress","Phase":"step-PENDING"}',
+                b'{"StackStatus":"CREATE_COMPLETE","State":"in-service","Phase":"step-DONE"}')
+        self.assertEqual(m.to_new, {})
+
     def test_ignores_timestamps_request_ids_and_short_values(self):
         m = IdMap()
         m.learn(b'{"RequestId":"00000000-0000-0000-0000-000000000001","Created":"2026-11-12T13:01:36Z","State":"on","T":1731412896.12}',
