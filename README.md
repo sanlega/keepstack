@@ -5,11 +5,12 @@
   </picture>
 </p>
 
-<h3 align="center">Your local AWS survives restarts.</h3>
+<h3 align="center">Test your Terraform on local AWS before it touches the real one.</h3>
 
 <p align="center">
-  Persistent state for <a href="https://docs.aws.amazon.com/emulator/latest/userguide/what-is-service.html">AWS Emulator</a>.
-  Reboot, come back days later, and <code>terraform plan</code> still says <em>No changes</em>.
+  keepstack gives the official <a href="https://docs.aws.amazon.com/emulator/latest/userguide/what-is-service.html">AWS Emulator</a> a memory.
+  Your local infrastructure survives restarts with the same IDs, and every pull request is applied on top of what
+  <code>main</code> already built. No AWS account, no tokens.
 </p>
 
 <p align="center">
@@ -21,6 +22,7 @@
 
 <p align="center">
   <a href="#quick-start">Quick start</a> ·
+  <a href="#validate-pull-requests">Validate pull requests</a> ·
   <a href="docs/how-it-works.md">How it works</a> ·
   <a href="docs/compatibility.md">Compatibility</a> ·
   <a href="CONTRIBUTING.md">Contributing</a>
@@ -29,6 +31,33 @@
 </p>
 
 <br>
+
+## Two ways to use it
+
+<table>
+<tr>
+<th width="50%">💻 On your machine</th>
+<th width="50%">🔁 In every pull request</th>
+</tr>
+<tr>
+<td>
+
+The official AWS Emulator, with a memory. Apply, reboot, come back days later: `terraform plan` still says
+*No changes*, with the same VPC IDs, ARNs and data. Add one resource and the plan shows exactly that one.
+
+**→ [Quick start](#quick-start)**
+
+</td>
+<td>
+
+One step in GitHub Actions applies the pull request on top of the environment `main` already built and comments the
+incremental plan and every problem on the PR: config errors, emulator gaps, non-idempotent resources.
+
+**→ [Validate pull requests](#validate-pull-requests)**
+
+</td>
+</tr>
+</table>
 
 ## The problem
 
@@ -99,6 +128,74 @@ Try the full loop with [`examples/quickstart`](examples/quickstart/main.tf).
 > [!IMPORTANT]
 > Use **AWS CLI v2**: v1 ignores `AWS_ENDPOINT_URL` for some services (e.g. SQS) and would call real AWS.
 > In Terraform, copy the `provider` block from the [quickstart example](examples/quickstart/main.tf).
+
+## Validate pull requests
+
+
+Add one step and every pull request that touches your infrastructure gets applied on the official AWS Emulator, with
+no AWS account and no tokens:
+
+```yaml
+# .github/workflows/infra.yml
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write   # for the PR comment
+    steps:
+      - uses: actions/checkout@v7
+      - uses: sanlega/keepstack@v0.3.0
+        with:
+          validate: infra/            # your Terraform directory
+          baseline: true              # validate PRs on top of main's environment
+          shims: true
+          run: pytest tests/smoke     # optional: check the resources really work
+```
+
+- **Job summary and a sticky PR comment** with the plan, the steps and every problem found.
+- **Inline annotations** on the `.tf` lines that fail.
+- **Baseline:** pushes to `main` save the resulting environment; pull requests restore it and are applied on top, so
+  the report shows the real incremental plan (replacements, destroys, `moved` blocks) instead of a greenfield apply.
+  Other local emulators start from an empty account on every run.
+
+The comment it leaves on the pull request (this one caught a replacement and a resource that is not idempotent):
+
+
+> ### keepstack validate: `infra` ❌ failed
+>
+> | Step | Result |
+> |---|---|
+> | init | ✅ ok |
+> | plan | ✅ ok |
+> | apply | ✅ ok |
+> | idempotency | ❌ failed |
+> | smoke | ✅ ok |
+>
+> **Plan:** 1 to add, 1 to change, 1 to replace, 0 to destroy
+>
+> > [!WARNING]
+> > Destructive changes:
+> > - `aws_sqs_queue.jobs` will be **replaced**
+>
+> | | Kind | Resource | Message |
+> |---|---|---|---|
+> | 🔁 | not idempotent | `aws_dynamodb_table.items` `main.tf:58` | plan is not empty after apply (update)<br>*Hint:* keepstack up --shims, or lifecycle { ignore_changes = [on_demand_throughput] } |
+>
+> <details><summary>Planned changes</summary>
+>
+> - `create` aws_subnet.b
+> - `replace` aws_sqs_queue.jobs
+> - `update` aws_dynamodb_table.items
+>
+> </details>
+>
+> <sub>keepstack · 52.3 s · AWS Emulator, no AWS account used</sub>
 
 ## Everyday commands
 
@@ -204,41 +301,9 @@ translations and your snapshots. It only answers on `127.0.0.1`.
 
 ## In GitHub Actions
 
-### Validate every pull request
-
-Add one step and every pull request that touches your infrastructure gets applied on the official AWS Emulator, with
-no AWS account and no tokens:
-
-```yaml
-# .github/workflows/infra.yml
-on:
-  push:
-    branches: [main]
-  pull_request:
-
-jobs:
-  validate:
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      pull-requests: write   # for the PR comment
-    steps:
-      - uses: actions/checkout@v7
-      - uses: sanlega/keepstack@v0.3.0
-        with:
-          validate: infra/            # your Terraform directory
-          baseline: true              # validate PRs on top of main's environment
-          shims: true
-          run: pytest tests/smoke     # optional: check the resources really work
-```
-
-- **Job summary and a sticky PR comment** with the plan, the steps and every problem found.
-- **Inline annotations** on the `.tf` lines that fail.
-- **Baseline:** pushes to `main` save the resulting environment; pull requests restore it and are applied on top, so
-  the report shows the real incremental plan (replacements, destroys, `moved` blocks) instead of a greenfield apply.
-  Other local emulators start from an empty account on every run.
-
 ### Just a local AWS
+
+Pull-request validation is described [above](#validate-pull-requests).
 
 Without `validate`, the action only starts keepstack and points the AWS CLI, SDKs and Terraform at it:
 
@@ -272,10 +337,11 @@ needs a Linux runner (Docker with Linux containers) and installs Terraform if th
 
 | | |
 |---|---|
-| 🔁 **Survives everything** | Ctrl+C, `docker kill`, Docker restarts, reboots. If the container dies, keepstack restores it on its own. |
+| 🧪 **Validate pull requests** | `keepstack validate` applies your Terraform locally and tells config errors apart from emulator gaps and non-idempotent resources, with file and line. |
+| 🧱 **Incremental, like production** | Pull requests are applied on top of `main`'s environment, so replacements and destroys show up before they reach AWS. |
+| 🔁 **Survives everything** | Ctrl+C, `docker kill`, Docker restarts, reboots, even a crash in the middle of `terraform apply`. Exercised every night by a [chaos suite](docs/how-it-works.md#crash-safety). |
 | 🪪 **Stable IDs** | `vpc-…`, KMS UUIDs, Secrets Manager ARNs, Route 53 zone IDs… keep their original values across restarts. |
 | 🔍 **Know before you apply** | `keepstack check` tells you what will break on the emulator before you run Terraform. |
-| 🧪 **Validate pull requests** | `keepstack validate` applies your Terraform locally and tells config errors apart from emulator gaps and non-idempotent resources. |
 | 📸 **Snapshots** | Save, restore and share whole environments, Terraform state included. |
 | 🩹 **Compatibility shims** | `--shims` works around known emulator bugs (e.g. `aws_security_group`), off by default. |
 | ⚡ **Zero setup** | One command, no config. The emulator image builds itself (x86_64 and Apple silicon). |
