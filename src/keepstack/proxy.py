@@ -111,6 +111,12 @@ def same_name_new_suffix(a, b):
     return bool(pa) and pa == pb and ta != tb and len(ta) == len(tb) >= 6 and ta.isalnum() and tb.isalnum()
 
 
+def same_shape_new_id(a, b):
+    """ZSOVGDZPSPRJKSM vs Z3LV898WM8KOB1A: a random uppercase ID that came out without digits, which id_like() cannot
+    tell from a word. Both responses answer the same request, so a long code that changed is generated."""
+    return a != b and len(a) == len(b) >= 12 and a.isalnum() and b.isalnum() and a.isupper() and b.isupper()
+
+
 def b64_blobs(data):
     return [m for m in B64_RE.findall(data) if b"+" in m or m.endswith(b"=")]
 
@@ -154,7 +160,8 @@ class IdMap:
             pairs = []
         for i, j in pairs:
             if not (i and a[i - 1].lower() in REQUEST_ID_KEYS) and (
-                    (id_like(a[i]) and id_like(b[j])) or same_name_new_suffix(a[i], b[j])):
+                    (id_like(a[i]) and id_like(b[j])) or same_name_new_suffix(a[i], b[j])
+                    or same_shape_new_id(a[i], b[j])):
                 learned += self._learn_pair(a[i], b[j])
         return learned
 

@@ -69,6 +69,21 @@ class TestIdMap(unittest.TestCase):
             self.assertEqual(m.to_emulator(b"SecretId=demo-db-password-" + old), b"SecretId=demo-db-password-" + new)
             self.assertEqual(m.to_client(b"secret:demo-db-password-" + new), b"secret:demo-db-password-" + old)
 
+    def test_route53_zone_id_without_digits(self):  # regression #36: ZSOVGDZPSPRJKSM was not translated
+        for old, new in ((b"ZSOVGDZPSPRJKSM", b"Z3LV898WM8KOB1A"), (b"Z3LV898WM8KOB1A", b"ZQWERTYUIOPASDF")):
+            m = IdMap()
+            m.learn(b"<HostedZone><Id>/hostedzone/%s</Id><Name>demo.internal.</Name></HostedZone>" % old,
+                    b"<HostedZone><Id>/hostedzone/%s</Id><Name>demo.internal.</Name></HostedZone>" % new)
+            self.assertEqual(m.to_emulator(b"/2013-04-01/hostedzone/" + old), b"/2013-04-01/hostedzone/" + new)
+            self.assertEqual(m.to_client(b"/hostedzone/" + new), b"/hostedzone/" + old)
+
+    def test_short_or_numeric_codes_are_not_ids(self):
+        m = IdMap()
+        # Long AWS enums use underscores; shorter codes and plain numbers are not IDs either.
+        m.learn(b'{"State":"CREATE_IN_PROGRESS","Alarm":"INSUFFICIENT_DATA","Code":"ABCDEFGHIJK","N":"123456789012"}',
+                b'{"State":"CREATE_COMPLETE_OK","Alarm":"OK_STATE_REACHED_","Code":"ZYXWVUTSRQP","N":"999999999999"}')
+        self.assertEqual(m.to_new, {})
+
     def test_status_changes_are_not_suffixes(self):
         # Recorded and replayed responses answer the same request, so names match; what changes between them is
         # generated values and statuses. Statuses use underscores or have a different length.
