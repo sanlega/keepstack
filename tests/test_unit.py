@@ -1,9 +1,14 @@
 import os
+import socket
 import sys
+import tempfile
 import time
 import unittest
+from argparse import Namespace
+from unittest import mock
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "src"))
+from keepstack import proxy
 from keepstack.proxy import IdMap, is_write, operation
 
 
@@ -112,6 +117,46 @@ class TestIdMap(unittest.TestCase):
         self.assertEqual(m.to_emulator(alias), b"igw-0000000000000008e")             # the new one
         self.assertEqual(m.to_emulator(b"igw-0000000000000008e"), b"igw-0000000000000008d")  # the original
         self.assertEqual(m.to_client(b"igw-0000000000000008e"), alias)               # stable
+
+
+class TestAbandonedRequests(unittest.TestCase):  # regression #34
+    def test_socket_closed(self):
+        a, b = socket.socketpair()
+        self.addCleanup(a.close)
+        self.assertFalse(proxy.socket_closed(a))       # open, nothing to read
+        b.sendall(b"GET / HTTP/1.1")
+        self.assertFalse(proxy.socket_closed(a))       # pipelined bytes: still there
+        a.recv(100)
+        b.close()
+        self.assertTrue(proxy.socket_closed(a))        # the client gave up
+
+    def app(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        app = proxy.App(Namespace(port=0, data_dir=tmp.name))
+        app.ready.set()
+        return app
+
+    def rows(self, app):
+        with proxy.connect(app.db_path) as db:
+            return db.execute("select count(*) from journal").fetchone()[0]
+
+    def test_write_abandoned_while_waiting_is_not_executed(self):
+        app = self.app()
+        headers = {"X-Amz-Target": "AmazonSQS.CreateQueue"}
+        with mock.patch.object(app, "forward", return_value=(200, "OK", [], b"{}")) as forward:
+            self.assertIs(app.handle("POST", "/", headers, b'{"QueueName":"q"}', client_gone=lambda: True),
+                          proxy.CLIENT_GONE)
+            forward.assert_not_called()
+            self.assertEqual(self.rows(app), 0)
+            status = app.handle("POST", "/", headers, b'{"QueueName":"q"}', client_gone=lambda: False)[0]
+        self.assertEqual((status, forward.call_count, self.rows(app)), (200, 1, 1))
+
+    def test_reads_are_answered_anyway(self):
+        app = self.app()
+        with mock.patch.object(app, "forward", return_value=(200, "OK", [], b"{}")) as forward:
+            app.handle("POST", "/", {"X-Amz-Target": "AmazonSQS.ListQueues"}, b"{}", client_gone=lambda: True)
+        forward.assert_called_once()
 
 
 if __name__ == "__main__":

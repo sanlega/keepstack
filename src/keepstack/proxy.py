@@ -17,7 +17,9 @@ import json
 import os
 import random
 import re
+import select
 import shutil
+import socket
 import sqlite3
 import ssl
 import subprocess
@@ -44,6 +46,7 @@ B64_RE = re.compile(rb"[A-Za-z0-9+/]{16,}={0,2}")  # base64 blobs: learned whole
 TIMELIKE_RE = re.compile(rb"[0-9TZEe.+-]+")     # dates, times, epochs, numbers (including 1.7E9)
 REQUEST_ID_KEYS = {b"requestid", b"request_id", b"x-amz-request-id", b"x-amzn-requestid"}
 READY_TIMEOUT = 300
+CLIENT_GONE = object()  # App.handle() result: the client left, nothing to answer
 REPLAY_RETRY_SECONDS = 30  # replay is faster than AWS: e.g. PutItem before the table is ACTIVE
 MAX_ALIGN_TOKENS = 4000    # difflib is quadratic: above this, match by position only
 
@@ -361,7 +364,7 @@ class App:
         status, _, _, data = self.forward(*self.prepare(op, method, path, headers, body))
         return status, shims.on_response(self, op, status, data)
 
-    def handle(self, method, path, headers, body):
+    def handle(self, method, path, headers, body, client_gone=lambda: False):
         if path.startswith(dashboard.PREFIX):  # served by keepstack itself, never forwarded or journaled
             return dashboard.handle(self, method, path, headers)
         op = operation(path, headers, body)
@@ -372,6 +375,12 @@ class App:
         if locked:
             self.lock.acquire()
         try:
+            # While this request waited (a restore, a slow write), its client may have given up and retried.
+            # Executing it now would create the resource behind the client's back: its retry then gets
+            # "already exists" and the resource never reaches the Terraform state.
+            if write and client_gone():
+                log(f"client gave up waiting; not executing {op or method + ' ' + path}")
+                return CLIENT_GONE
             seq = None
             if locked:
                 # Journal first, emulator second: if SQLite fails, the client gets an error
@@ -403,6 +412,16 @@ class App:
         finally:
             if locked:
                 self.lock.release()
+
+
+def socket_closed(sock):
+    """True when the peer closed its side, e.g. an SDK that timed out waiting and will retry. Bytes waiting to be
+    read (a pipelined request) mean it is still there."""
+    try:
+        readable, _, _ = select.select([sock], [], [], 0)
+        return bool(readable) and sock.recv(1, socket.MSG_PEEK) == b""
+    except (OSError, ValueError):  # reset or already closed
+        return True
 
 
 def make_handler(app):
@@ -449,10 +468,14 @@ def make_handler(app):
                 return self.reply(400, "Bad Request", [], b"keepstack: malformed request body")
             headers = {k: v for k, v in self.headers.items() if k.lower() not in HOP}
             try:
-                result = app.handle(self.command, self.path, headers, body)
+                result = app.handle(self.command, self.path, headers, body,
+                                    client_gone=lambda: socket_closed(self.connection))
             except Exception as e:  # noqa: BLE001 - return 502 instead of hanging the client
                 log(f"error forwarding {self.command} {self.path}: {e}")
                 result = 502, "Bad Gateway", [], f"keepstack: {e}".encode()
+            if result is CLIENT_GONE:
+                self.close_connection = True
+                return
             self.reply(*result)
 
         do_GET = do_POST = do_PUT = do_DELETE = do_HEAD = do_PATCH = do_OPTIONS = any

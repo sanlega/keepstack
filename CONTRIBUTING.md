@@ -48,7 +48,7 @@ Terraform are missing. Useful variables:
 | Variable | Purpose |
 |---|---|
 | `TERRAFORM` | Path to a specific Terraform binary (default: `terraform` on `PATH`) |
-| `KEEPSTACK_E2E_PORT` | Port for the main end-to-end run (default `9340`; the emulator uses the next one). The other suites use 9350, 9360 and 9380 (`KEEPSTACK_E2E_DAEMON_PORT`, `KEEPSTACK_E2E_COMPACT_PORT`, `KEEPSTACK_E2E_SHIMS_PORT`, 9390 for the dashboard and 9420-9423 for `validate`, `KEEPSTACK_E2E_VALIDATE_PORT`) |
+| `KEEPSTACK_E2E_PORT` | Port for the main end-to-end run (default `9340`; the emulator uses the next one). The other suites use 9350, 9360 and 9380 (`KEEPSTACK_E2E_DAEMON_PORT`, `KEEPSTACK_E2E_COMPACT_PORT`, `KEEPSTACK_E2E_SHIMS_PORT`, 9390 for the dashboard, 9420-9423 for `validate`, `KEEPSTACK_E2E_VALIDATE_PORT`, and 9470 for crash safety, `KEEPSTACK_E2E_CRASH_PORT`) |
 | `TF_PLUGIN_CACHE_DIR` | Reuse downloaded providers between runs |
 
 Unit tests only (no Docker): `PYTHONPATH=src python -m unittest tests.test_unit tests.test_check tests.test_doctor tests.test_daemon tests.test_snapshot tests.test_compact tests.test_shims tests.test_dashboard tests.test_validate`.
