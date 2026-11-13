@@ -335,7 +335,7 @@ Linux runner（支持 Linux 容器的 Docker），如果 runner 上没有 Terraf
 |---|---|
 | 🧪 **验证拉取请求** | `keepstack validate` 在本地 apply 你的 Terraform，并区分配置错误、模拟器缺陷和非幂等资源，精确到文件和行号。 |
 | 🧱 **增量验证，与生产一致** | 拉取请求在 `main` 的环境之上 apply，替换和销毁在到达 AWS 之前就会显现。 |
-| 🔁 **任何情况都不丢状态** | Ctrl+C、`docker kill`、Docker 重启、整机重启均可。容器挂掉时，keepstack 会自动将其恢复。 |
+| 🔁 **任何情况都不丢状态** | Ctrl+C、`docker kill`、Docker 重启、整机重启，甚至 `terraform apply` 进行到一半时崩溃。每晚由[混沌测试](../how-it-works.md#crash-safety)验证。 |
 | 🪪 **ID 保持稳定** | `vpc-…`、KMS UUID、Secrets Manager ARN、Route 53 托管区域 ID 等，重启前后保持原值。 |
 | 🔍 **应用前先知道** | `keepstack check` 在你运行 Terraform 之前就告诉你哪些东西会在模拟器上出问题。 |
 | 📸 **快照** | 保存、恢复和分享整个环境，包含 Terraform 状态。 |

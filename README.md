@@ -339,7 +339,7 @@ needs a Linux runner (Docker with Linux containers) and installs Terraform if th
 |---|---|
 | 🧪 **Validate pull requests** | `keepstack validate` applies your Terraform locally and tells config errors apart from emulator gaps and non-idempotent resources, with file and line. |
 | 🧱 **Incremental, like production** | Pull requests are applied on top of `main`'s environment, so replacements and destroys show up before they reach AWS. |
-| 🔁 **Survives everything** | Ctrl+C, `docker kill`, Docker restarts, reboots. If the container dies, keepstack restores it on its own. |
+| 🔁 **Survives everything** | Ctrl+C, `docker kill`, Docker restarts, reboots, even a crash in the middle of `terraform apply`. Exercised every night by a [chaos suite](docs/how-it-works.md#crash-safety). |
 | 🪪 **Stable IDs** | `vpc-…`, KMS UUIDs, Secrets Manager ARNs, Route 53 zone IDs… keep their original values across restarts. |
 | 🔍 **Know before you apply** | `keepstack check` tells you what will break on the emulator before you run Terraform. |
 | 📸 **Snapshots** | Save, restore and share whole environments, Terraform state included. |

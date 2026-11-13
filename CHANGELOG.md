@@ -17,6 +17,10 @@ All notable changes to this project are documented here. The format follows
 - `scripts/chaos.py` and a nightly workflow: kill the emulator, keepstack, or everything at once in the middle of
   `terraform apply` and require Terraform to converge. Documented in [how it works](docs/how-it-works.md#crash-safety).
 
+### Changed
+- README: leads with Terraform validation (locally and in every pull request), with persistence as the engine;
+  example of the pull request comment.
+
 ## [0.3.0] - 2026-11-13
 
 keepstack becomes a pull-request validator for Terraform: apply every change on the official AWS Emulator, on top of

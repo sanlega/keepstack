@@ -341,7 +341,7 @@ acción necesita un runner Linux (Docker con contenedores Linux) e instala Terra
 |---|---|
 | 🧪 **Valida pull requests** | `keepstack validate` aplica tu Terraform en local y distingue errores de configuración, carencias del emulador y recursos no idempotentes, con fichero y línea. |
 | 🧱 **Incremental, como en producción** | Los pull requests se aplican sobre el entorno de `main`, así que los reemplazos y borrados aparecen antes de llegar a AWS. |
-| 🔁 **Sobrevive a todo** | Ctrl+C, `docker kill`, reinicios de Docker, reinicios del equipo. Si el contenedor muere, keepstack lo restaura por su cuenta. |
+| 🔁 **Sobrevive a todo** | Ctrl+C, `docker kill`, reinicios de Docker, reinicios del equipo, incluso un crash en mitad de un `terraform apply`. Lo comprueba cada noche una [suite de caos](../how-it-works.md#crash-safety). |
 | 🪪 **IDs estables** | `vpc-…`, UUID de KMS, ARN de Secrets Manager, IDs de zona de Route 53… conservan su valor original tras los reinicios. |
 | 🔍 **Sabes antes de aplicar** | `keepstack check` te dice qué fallará en el emulador antes de ejecutar Terraform. |
 | 📸 **Snapshots** | Guarda, restaura y comparte entornos completos, estado de Terraform incluido. |
