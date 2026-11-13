@@ -41,6 +41,11 @@ class Classify(unittest.TestCase):
                             "api error NotImplemented: scaffolded but not implemented in this emulator"), COMPAT)
         self.assertEqual((f["kind"], f["file"], f["line"]), ("emulator", "main.tf", 3))
 
+    def test_unknown_service_is_an_emulator_gap(self):  # regression #43
+        f = v.classify(diag("operation error Service Catalog: CreatePortfolio, https response error StatusCode: 404, "
+                            "api error UnknownService: no emulated service is registered for 'servicecatalog'"), COMPAT)
+        self.assertEqual(f["kind"], "emulator")
+
     def test_known_broken_resource_is_an_emulator_gap_with_its_workaround(self):
         f = v.classify(diag("InvalidPermission.NotFound", "aws_security_group.web"), COMPAT)
         self.assertEqual((f["kind"], f["hint"]), ("emulator", "keepstack up --shims"))

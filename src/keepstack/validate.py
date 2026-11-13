@@ -16,7 +16,7 @@ import time
 from . import check, daemon
 
 OVERRIDE = "zz_keepstack_override.tf"
-GAP_RE = re.compile(r"StatusCode: 501|NotImplemented|not implemented in this emulator", re.IGNORECASE)
+GAP_RE = re.compile(r"StatusCode: 501|NotImplemented|not implemented in this emulator|UnknownService|no emulated service", re.IGNORECASE)
 # Terraform's JSON plan actions; "noop" and "read" are not changes.
 CHANGE_ACTIONS = ("create", "update", "replace", "delete", "move", "import", "remove")
 DESTRUCTIVE = ("replace", "delete")
