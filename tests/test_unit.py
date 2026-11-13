@@ -174,5 +174,13 @@ class TestAbandonedRequests(unittest.TestCase):  # regression #34
         forward.assert_called_once()
 
 
+class TestActionMetadata(unittest.TestCase):  # regression #41
+    def test_marketplace_description_limit(self):
+        root = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
+        with open(os.path.join(root, "action.yml"), encoding="utf-8") as f:
+            line = next(l for l in f if l.startswith("description:"))
+        self.assertLess(len(line.split(":", 1)[1].strip()), 125)
+
+
 if __name__ == "__main__":
     unittest.main()
