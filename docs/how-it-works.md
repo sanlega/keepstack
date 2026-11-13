@@ -96,6 +96,23 @@ journal (`meta['shims']`) so the recorded calls replay the same way; `--reset` f
   to it (versioned S3 buckets are left alone). Anything shared with a surviving resource is kept. The result is
   replayed in a throwaway emulator before it replaces the journal, and the previous journal is saved as `pre-compact`.
 
+## Crash safety
+
+The journal is written **before** a write reaches the emulator and confirmed only when the emulator answered 2xx,
+in an SQLite transaction. Every way of dying mid-apply ends in a state that matches what Terraform was told:
+
+| What dies in the middle of `terraform apply` | What happens |
+|---|---|
+| **The emulator** (`docker kill`, Docker restart, OOM) | keepstack notices, starts a new emulator and replays the journal while new requests wait. The SDK's retries go through once the state is back: the apply usually finishes by itself. |
+| **keepstack** (`kill -9`), restarted while Terraform retries | A write that was in flight is left unconfirmed and skipped on the next start (the client never got an answer, so Terraform does not have it either). Terraform's retries then succeed. |
+| **Everything at once** (power cut) | The same, plus Terraform dies: run `terraform apply` again and it converges. |
+| **The client gives up** while its request waits (restore, slow write) | The request is not executed: keepstack checks the connection before running a request that waited. Otherwise the resource would be created behind the client's back and its retry would fail with "already exists". |
+
+This is exercised by [`scripts/chaos.py`](../scripts/chaos.py), which kills one of the three at a random moment of
+an apply of the quickstart example and requires the re-apply to converge and the plan to stay clean after another
+restart. It runs nightly in CI ([`chaos.yml`](../.github/workflows/chaos.yml)); the deterministic case of the
+abandoned write is an end-to-end test (`tests/test_e2e_crash.py`).
+
 ## Limitations
 
 - **Heuristic.** A generated value that never appears in a write response cannot be learned, and very large responses
@@ -103,7 +120,8 @@ journal (`meta['shims']`) so the recorded calls replay the same way; `--reset` f
 - **Ordering of concurrent consumers.** `ReceiveMessage` is journaled without the write lock (so a 20-second long poll
   does not block other writes). With several concurrent consumers the journal order may differ from the real one.
 - **Interrupted writes.** If keepstack dies after the emulator applied a write but before the journal confirmed it,
-  that write is skipped on replay (and reported).
+  that write is skipped on replay (and reported); the client never got an answer, so it retries or reports an error.
+  A write the client abandoned after the emulator started running it cannot be undone (as on AWS).
 - **Side effects run again.** Lambda `Invoke`, SNS → SQS deliveries and anything the emulator runs internally happen
   again when the calls that caused them are replayed.
 - **In-memory bodies.** Requests and responses are buffered (no streaming). Tested with 20 MB multipart S3 uploads.

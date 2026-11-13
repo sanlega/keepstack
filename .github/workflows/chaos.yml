@@ -1,0 +1,37 @@
+name: Chaos
+
+# Kills the emulator, keepstack, or everything at once in the middle of `terraform apply`, and requires Terraform
+# to converge afterwards (scripts/chaos.py). Too slow for every pull request: nightly and on demand.
+on:
+  schedule:
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+    inputs:
+      iterations:
+        description: Iterations (each mode is used in turn)
+        default: "9"
+
+permissions:
+  contents: read
+
+jobs:
+  chaos:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_wrapper: false
+      - name: Chaos
+        env:
+          ITERATIONS: ${{ inputs.iterations || '9' }}
+        run: python scripts/chaos.py --iterations "$ITERATIONS" --report chaos-report.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: chaos-report
+          path: chaos-report.json

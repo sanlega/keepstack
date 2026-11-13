@@ -5,6 +5,16 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+- A write that waited while keepstack restored the emulator (or behind a slow write), and whose client gave up and
+  retried meanwhile, was still executed afterwards: the resource was created behind Terraform's back and the retry
+  failed with "already exists" (`BucketAlreadyExists`, `ResourceInUseException`). keepstack now checks that the client
+  is still connected before running a request that waited.
+
+### Added
+- `scripts/chaos.py` and a nightly workflow: kill the emulator, keepstack, or everything at once in the middle of
+  `terraform apply` and require Terraform to converge. Documented in [how it works](docs/how-it-works.md#crash-safety).
+
 ## [0.3.0] - 2026-11-13
 
 keepstack becomes a pull-request validator for Terraform: apply every change on the official AWS Emulator, on top of
