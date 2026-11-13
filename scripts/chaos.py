@@ -15,6 +15,7 @@ import argparse
 import json
 import os
 import random
+import re
 import shutil
 import signal
 import subprocess
@@ -24,6 +25,17 @@ import time
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 MODES = ("emulator", "keepstack", "power")
+ALREADY_EXISTS = re.compile(r"already exists|AlreadyExists|ResourceInUseException|AlreadyOwnedByYou", re.IGNORECASE)
+PLANNED = re.compile(r"^  # (\S+) will be", re.MULTILINE)
+
+
+def orphans(apply_output):
+    """Resources a killed `terraform apply` created but never saved (as on AWS): the re-apply's errors when every
+    one of them says "already exists", otherwise None (a real failure)."""
+    errors = apply_output.split("\nError: ")[1:]
+    if not errors or not all(ALREADY_EXISTS.search(e.split("\n", 1)[0]) for e in errors):
+        return None
+    return sorted(set(re.findall(r"^\s+with (\S+),", apply_output, re.MULTILINE)))
 
 
 def run(cmd, env, cwd=None, timeout=900):
@@ -79,7 +91,7 @@ def iteration(i, mode, delay, args, tf, env, work):
         reapplies.append(rc)
         if rc == 0:
             break
-    plan_rc, _ = run([tf, "plan", "-detailed-exitcode", "-input=false", "-no-color"], env, cwd=root)
+    plan_rc, plan = run([tf, "plan", "-detailed-exitcode", "-input=false", "-no-color"], env, cwd=root)
     ks("down")
     ks(*up)
     restart_rc, restart_plan = run([tf, "plan", "-detailed-exitcode", "-input=false", "-no-color"], env, cwd=root)
@@ -90,6 +102,12 @@ def iteration(i, mode, delay, args, tf, env, work):
               "unconfirmed_skipped": log.count("was never confirmed"), "abandoned": log.count("client gave up"),
               "replay_failed": log.count("REPLAY FAILED")}
     result["ok"] = reapplies[-1] == 0 and plan_rc == 0 and restart_rc == 0
+    lost = orphans(out) if mode == "power" and reapplies[-1] != 0 else None
+    if lost is not None:
+        # Terraform died before saving them, as it would on AWS; keepstack's part is to keep exactly the same state
+        # across another restart.
+        result["orphaned_by_terraform"] = lost
+        result["ok"] = PLANNED.findall(plan) == PLANNED.findall(restart_plan)
     if not result["ok"]:
         result["details"] = {"first_apply": first[-3000:], "last_reapply": out[-3000:],
                              "plan_after_restart": restart_plan[-3000:], "keepstack_log": log[-3000:]}

@@ -105,12 +105,12 @@ in an SQLite transaction. Every way of dying mid-apply ends in a state that matc
 |---|---|
 | **The emulator** (`docker kill`, Docker restart, OOM) | keepstack notices, starts a new emulator and replays the journal while new requests wait. The SDK's retries go through once the state is back: the apply usually finishes by itself. |
 | **keepstack** (`kill -9`), restarted while Terraform retries | A write that was in flight is left unconfirmed and skipped on the next start (the client never got an answer, so Terraform does not have it either). Terraform's retries then succeed. |
-| **Everything at once** (power cut) | The same, plus Terraform dies: run `terraform apply` again and it converges. |
+| **Everything at once** (power cut) | keepstack restores everything the emulator confirmed. Terraform itself may have died while creating a resource it never saved to its state: as on AWS, the next apply reports "already exists" for it, and `terraform import` brings it back under management. |
 | **The client gives up** while its request waits (restore, slow write) | The request is not executed: keepstack checks the connection before running a request that waited. Otherwise the resource would be created behind the client's back and its retry would fail with "already exists". |
 
 This is exercised by [`scripts/chaos.py`](../scripts/chaos.py), which kills one of the three at a random moment of
 an apply of the quickstart example and requires the re-apply to converge and the plan to stay clean after another
-restart. It runs nightly in CI ([`chaos.yml`](../.github/workflows/chaos.yml)); the deterministic case of the
+restart (after a power cut: that the only errors are resources Terraform lost, and that another restart changes nothing). It runs nightly in CI ([`chaos.yml`](../.github/workflows/chaos.yml)); the deterministic case of the
 abandoned write is an end-to-end test (`tests/test_e2e_crash.py`).
 
 ## Limitations
