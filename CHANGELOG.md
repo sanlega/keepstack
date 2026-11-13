@@ -16,6 +16,8 @@ All notable changes to this project are documented here. The format follows
 ### Added
 - `scripts/chaos.py` and a nightly workflow: kill the emulator, keepstack, or everything at once in the middle of
   `terraform apply` and require Terraform to converge. Documented in [how it works](docs/how-it-works.md#crash-safety).
+  After a power cut, resources that Terraform created but never saved (as would happen on AWS) are reported as
+  `orphaned_by_terraform` instead of failing the run, as long as keepstack keeps exactly the same state across a restart.
 
 ### Changed
 - README: leads with Terraform validation (locally and in every pull request), with persistence as the engine;
