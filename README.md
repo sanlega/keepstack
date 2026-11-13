@@ -267,7 +267,7 @@ plans again and classifies every problem:
 |---|---|---|
 | ❌ | **Config error**: AWS rejected the request, or the provider did | Yes |
 | 🔁 | **Not idempotent**: the plan is not empty right after the apply | Yes |
-| ⚠️ | **Emulator gap**: the emulator does not implement that API (HTTP 501) or has a known bug | Only with `--strict` |
+| ⚠️ | **Emulator gap**: the emulator does not implement that API or service (HTTP 501, `UnknownService`) or has a known bug | Only with `--strict` |
 
 ```console
 $ keepstack validate infra/

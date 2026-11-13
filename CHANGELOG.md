@@ -6,6 +6,8 @@ All notable changes to this project are documented here. The format follows
 ## [Unreleased]
 
 ### Fixed
+- `keepstack validate` reported services the emulator does not have (`404 UnknownService`, which recent emulator
+  versions return instead of 501) as config errors; they are emulator gaps now and only warn unless `--strict`.
 - A write that waited while keepstack restored the emulator (or behind a slow write), and whose client gave up and
   retried meanwhile, was still executed afterwards: the resource was created behind Terraform's back and the retry
   failed with "already exists" (`BucketAlreadyExists`, `ResourceInUseException`). keepstack now checks that the client

@@ -27,7 +27,8 @@ resource "aws_dynamodb_table" "t" {
 QUEUE = 'resource "aws_sqs_queue" "jobs" {\n  name = "%s"\n}\n'
 OUTPUT = 'output "queue" {\n  value = aws_sqs_queue.jobs.url\n}\n'
 # The emulator answers 501 for Athena's ListTagsForResource.
-GAP = 'resource "aws_athena_workgroup" "gap" {\n  name = "validate-gap"\n}\n'
+# A service the emulator does not have (404 UnknownService); the emulator grows, so this may need updating.
+GAP = 'resource "aws_qldb_ledger" "gap" {\n  name             = "validate-gap"\n  permissions_mode = "STANDARD"\n}\n'
 # Rejected by the provider before any API call: a genuine configuration error.
 BROKEN = TABLE.replace('type = "S"\n  }\n}', 'type = "S"\n  }\n  attribute {\n    name = "unused"\n'
                                               '    type = "S"\n  }\n}')

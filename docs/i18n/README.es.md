@@ -269,7 +269,7 @@ a planificar y clasifica cada problema:
 |---|---|---|
 | ❌ | **Error de configuración**: AWS o el provider rechazaron la petición | Sí |
 | 🔁 | **No idempotente**: el plan no sale vacío justo después del apply | Sí |
-| ⚠️ | **Carencia del emulador**: el emulador no implementa esa API (HTTP 501) o tiene un bug conocido | Solo con `--strict` |
+| ⚠️ | **Carencia del emulador**: el emulador no implementa esa API o servicio (HTTP 501, `UnknownService`) o tiene un bug conocido | Solo con `--strict` |
 
 ```console
 $ keepstack validate infra/

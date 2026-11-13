@@ -266,7 +266,7 @@ override 文件把 Terraform 指向它（你的后端和 `.terraform` 不受影�
 |---|---|---|
 | ❌ | **配置错误**：AWS 或 provider 拒绝了请求 | 是 |
 | 🔁 | **非幂等**：apply 之后 plan 不为空 | 是 |
-| ⚠️ | **模拟器缺陷**：模拟器未实现该 API（HTTP 501）或存在已知 bug | 仅在 `--strict` 时 |
+| ⚠️ | **模拟器缺陷**：模拟器未实现该 API 或服务（HTTP 501、`UnknownService`）或存在已知 bug | 仅在 `--strict` 时 |
 
 ```console
 $ keepstack validate infra/
