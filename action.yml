@@ -1,5 +1,5 @@
 name: keepstack
-description: Persistent local AWS for your workflows, and a Terraform validator for pull requests. Runs the official AWS Emulator behind keepstack.
+description: Persistent local AWS for your workflows and a Terraform validator for pull requests, on the official AWS Emulator.
 author: keepstack contributors
 branding:
   icon: database
