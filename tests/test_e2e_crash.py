@@ -64,7 +64,11 @@ class E2ECrash(unittest.TestCase):
         for i in range(200):  # a journal long enough that restoring it outlasts the client's patience
             self.assertEqual(sqs("CreateQueue", {"QueueName": f"filler-{i}"})[0], 200)
         sh("docker", "kill", f"keepstack-{PORT}")
-        time.sleep(1.5)  # the watcher is restoring the emulator now; writes wait
+        # A fixed sleep raced the watcher (#47): before it notices, writes hit the dead emulator and fail at once.
+        deadline = time.time() + 30
+        while "the emulator stopped" not in self.ks("logs").stdout and time.time() < deadline:
+            time.sleep(0.2)
+        time.sleep(0.5)  # the watcher is restoring the emulator now; writes wait
         with self.assertRaises((socket.timeout, TimeoutError), msg="restore finished too fast to test"):
             sqs("CreateQueue", {"QueueName": "abandoned"}, timeout=1)
         deadline = time.time() + 120
