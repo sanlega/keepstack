@@ -174,6 +174,82 @@ class TestAbandonedRequests(unittest.TestCase):  # regression #34
         forward.assert_called_once()
 
 
+def stack_xml(*resources, status="CREATE_COMPLETE"):
+    members = "".join(f"<member><LogicalResourceId>{lid}</LogicalResourceId><PhysicalResourceId>{phys}"
+                      f"</PhysicalResourceId><ResourceStatus>{status}</ResourceStatus></member>"
+                      for lid, phys in resources)
+    return (f'<DescribeStackResourcesResponse xmlns="http://cloudformation.amazonaws.com/doc/2010-05-15/">'
+            f"<DescribeStackResourcesResult><StackResources>{members}</StackResources>"
+            f"</DescribeStackResourcesResult></DescribeStackResourcesResponse>").encode()
+
+
+QURL = "https://sqs.us-east-1.amazonaws.com/000000000000/"
+
+
+class TestStackPhysicalNames(unittest.TestCase):  # #19
+    def app(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        app = proxy.App(Namespace(port=0, data_dir=tmp.name))
+        app.ready.set()
+        return app
+
+    def test_names_pair_by_logical_id_in_any_order(self):
+        ids = IdMap()
+        orig = stack_xml(("Q", QURL + "s-Q-C212895A2991"), ("T", "s-T-41AE15097CA5"))
+        new = stack_xml(("T", "s-T-9F00AA11BB22"), ("Q", QURL + "s-Q-C44A15AE335D"))
+        self.assertEqual(ids.learn_stack(orig, new), 2)
+        self.assertEqual(ids.to_client(b'{"QueueUrl":"' + QURL.encode() + b's-Q-C44A15AE335D"}'),
+                         b'{"QueueUrl":"' + QURL.encode() + b's-Q-C212895A2991"}')
+        self.assertEqual(ids.to_emulator(b"TableName=s-T-41AE15097CA5"), b"TableName=s-T-9F00AA11BB22")
+
+    def test_deploy_journals_a_snapshot_once_the_stack_settles(self):
+        app = self.app()
+        busy, done = stack_xml(("Q", "s-Q-C212895A2991"), status="CREATE_IN_PROGRESS"), \
+            stack_xml(("Q", "s-Q-C212895A2991"))
+        replies = [(200, "OK", [], b"<CreateStackResponse/>"), (200, "OK", [], busy), (200, "OK", [], done)]
+        with mock.patch.object(app, "forward", side_effect=replies), mock.patch.object(proxy.time, "sleep"), \
+                mock.patch.object(proxy.threading, "Thread") as thread:
+            app.handle("POST", "/", {"Content-Type": "application/x-www-form-urlencoded"},
+                       b"Action=CreateStack&StackName=s&TemplateBody=%7B%7D&Version=2010-05-15")
+            thread.assert_called_once()
+            app.snapshot_stack(*thread.call_args.kwargs["args"])  # run it here instead of in a thread
+        with proxy.connect(app.db_path) as db:
+            ops = db.execute("select op, body, resp from journal order by seq").fetchall()
+        self.assertEqual([o for o, _, _ in ops], ["CreateStack", "DescribeStackResources"])
+        self.assertIn(b"StackName=s", ops[1][1])
+        self.assertEqual(ops[1][2], done)
+
+    def test_replay_waits_for_the_stack_and_translates_its_names(self):
+        app = self.app()
+        orig = stack_xml(("Q", QURL + "s-Q-C212895A2991"))
+        new = stack_xml(("Q", QURL + "s-Q-C44A15AE335D"))
+        with proxy.connect(app.db_path) as db:
+            for op, body, resp in [("CreateStack", b"Action=CreateStack&StackName=s", b"<ok/>"),
+                                   ("DescribeStackResources", b"Action=DescribeStackResources&StackName=s", orig)]:
+                db.execute("insert into journal(ts, op, method, path, headers, body, status, resp) "
+                           "values(0,?,'POST','/','{}',?,200,?)", (op, body, resp))
+        busy = stack_xml(("Q", ""), status="CREATE_IN_PROGRESS")
+        with mock.patch.object(app, "start_emulator"), mock.patch.object(proxy.shims, "enabled"), \
+                mock.patch.object(proxy.time, "sleep"), \
+                mock.patch.object(app, "send", side_effect=[(200, b"<ok/>"), (200, busy), (200, new)]) as send:
+            app.boot()
+        self.assertEqual(send.call_count, 3)
+        self.assertEqual(app.ids.to_client(new), orig)
+
+    def test_snapshot_of_a_deploy_interrupted_by_a_restart_is_dropped(self):
+        app = self.app()
+        busy = stack_xml(("Q", "s-Q-C212895A2991"), status="CREATE_IN_PROGRESS")
+
+        def restart_meanwhile(*_):
+            app.generation += 1
+            return 200, "OK", [], busy
+        with mock.patch.object(app, "forward", side_effect=restart_meanwhile), mock.patch.object(proxy.time, "sleep"):
+            app.snapshot_stack("/", {}, b"Action=CreateStack&StackName=s")
+        with proxy.connect(app.db_path) as db:
+            self.assertEqual(db.execute("select count(*) from journal").fetchone()[0], 0)
+
+
 class TestActionMetadata(unittest.TestCase):  # regression #41
     def test_marketplace_description_limit(self):
         root = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")

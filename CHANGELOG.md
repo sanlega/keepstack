@@ -5,6 +5,12 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+- Physical names that CloudFormation generates (a queue without `QueueName`, a table without `TableName`...) changed
+  after a restart. keepstack now journals `DescribeStackResources` once a stack deploy (`CreateStack`, `UpdateStack`,
+  `ExecuteChangeSet`) settles, and translates the replayed names back to the original ones
+  ([#19](https://github.com/sanlega/keepstack/issues/19)).
+
 ## [0.3.1] - 2026-11-13
 
 ### Fixed

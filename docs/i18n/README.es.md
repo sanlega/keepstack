@@ -423,8 +423,8 @@ Puedes ejecutar varios entornos aislados en paralelo con distintos `--port`, `--
   Detalles en [cómo funciona](../how-it-works.md#limitations).
 - **El journal solo crece** hasta que ejecutas `keepstack compact`, que elimina los recursos creados y luego
   borrados.
-- **CloudFormation / CDK:** los stacks persisten, pero los nombres físicos que genera CloudFormation (recursos sin
-  `QueueName`, `BucketName`...) cambian tras un reinicio. Pon nombre a los recursos de los que dependas.
+- **CloudFormation / CDK:** los stacks persisten, también los nombres físicos que genera CloudFormation (recursos sin
+  `QueueName`, `BucketName`...), salvo los de un stack que aún se estaba desplegando cuando keepstack se detuvo.
 
 </details>
 
