@@ -10,6 +10,8 @@ All notable changes to this project are documented here. The format follows
   retried meanwhile, was still executed afterwards: the resource was created behind Terraform's back and the retry
   failed with "already exists" (`BucketAlreadyExists`, `ResourceInUseException`). keepstack now checks that the client
   is still connected before running a request that waited.
+- Route 53 zone IDs that came out without digits (`ZSOVGDZPSPRJKSM`) were not recognized as generated, so they were
+  not translated after a restart and Terraform saw the zone as deleted (intermittent).
 
 ### Added
 - `scripts/chaos.py` and a nightly workflow: kill the emulator, keepstack, or everything at once in the middle of
