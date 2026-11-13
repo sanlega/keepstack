@@ -27,6 +27,7 @@ import sys
 import threading
 import time
 import urllib.parse
+import xml.etree.ElementTree as ET
 from contextlib import contextmanager
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
@@ -49,6 +50,11 @@ READY_TIMEOUT = 300
 CLIENT_GONE = object()  # App.handle() result: the client left, nothing to answer
 REPLAY_RETRY_SECONDS = 30  # replay is faster than AWS: e.g. PutItem before the table is ACTIVE
 MAX_ALIGN_TOKENS = 4000    # difflib is quadratic: above this, match by position only
+# CloudFormation generates physical names (stack-Q-C212895A2991) that only reads return. After these writes keepstack
+# journals a DescribeStackResources snapshot, so the replay can pair the old names with the new ones (#19).
+STACK_DEPLOY_OPS = {"CreateStack", "UpdateStack", "ExecuteChangeSet"}
+STACK_SNAPSHOT_OP = "DescribeStackResources"
+STACK_SNAPSHOT_TIMEOUT = 600
 
 
 @contextmanager
@@ -117,6 +123,25 @@ def same_shape_new_id(a, b):
     return a != b and len(a) == len(b) >= 12 and a.isalnum() and b.isalnum() and a.isupper() and b.isupper()
 
 
+def stack_physical_ids(xml):
+    """DescribeStackResources XML -> {LogicalResourceId: PhysicalResourceId}."""
+    try:
+        root = ET.fromstring(xml or b"")
+    except ET.ParseError:
+        return {}
+    out = {}
+    for member in root.iter():
+        kids = {c.tag.rsplit("}", 1)[-1]: c.text or "" for c in member}
+        if kids.get("LogicalResourceId") and kids.get("PhysicalResourceId"):
+            out[kids["LogicalResourceId"]] = kids["PhysicalResourceId"].encode()
+    return out
+
+
+def stack_settled(xml):
+    """Every resource of the snapshot has finished (nothing *_IN_PROGRESS)."""
+    return bool(stack_physical_ids(xml)) and b"_IN_PROGRESS<" not in xml
+
+
 def b64_blobs(data):
     return [m for m in B64_RE.findall(data) if b"+" in m or m.endswith(b"=")]
 
@@ -164,6 +189,11 @@ class IdMap:
                     or same_shape_new_id(a[i], b[j])):
                 learned += self._learn_pair(a[i], b[j])
         return learned
+
+    def learn_stack(self, orig_xml, new_xml):
+        """Pairs physical names by logical resource ID, so the order of the resources does not matter."""
+        new = stack_physical_ids(new_xml)
+        return sum(self.learn(phys, new[lid]) for lid, phys in stack_physical_ids(orig_xml).items() if lid in new)
 
     def _learn_pair(self, x, y):
         if x == y or x in self.to_new or y in self.to_orig:
@@ -240,6 +270,7 @@ class App:
         self.lock = threading.RLock()       # serializes writes and the replay
         self.ready = threading.Event()      # cleared while restarting/replaying
         self.stopping = False
+        self.generation = 0                 # bumped on every boot
         self.container = f"keepstack-{args.port}"  # one per instance: allows several in parallel
         os.makedirs(args.data_dir, exist_ok=True)
         self.db_path = os.path.join(args.data_dir, "journal.db")
@@ -294,6 +325,7 @@ class App:
         """Starts a clean emulator and replays the journal. Blocks traffic meanwhile."""
         self.ready.clear()
         with self.lock:
+            self.generation += 1  # a stack snapshot taken across a restart would mix two emulators
             shims.enabled(self)  # decide (and log) before replaying, which may need them
             self.start_emulator()
             self.ids = IdMap()
@@ -306,19 +338,28 @@ class App:
                 if not 200 <= status < 300:
                     log(f"warning: #{seq} {name} was never confirmed (keepstack was interrupted mid-call); skipping")
                     continue
-                deadline, delay = time.time() + REPLAY_RETRY_SECONDS, 0.25
+                snapshot = op == STACK_SNAPSHOT_OP
+                start, delay = time.time(), 0.25
                 while True:
                     try:
                         st, data = self.send(method, path, json.loads(headers), body, op)
                     except Exception as e:  # noqa: BLE001 - one broken row must not prevent restoring the rest
                         st, data = 0, repr(e).encode()
-                    if 200 <= st < 300 or time.time() > deadline:
+                    ok_st = 200 <= st < 300
+                    # the replayed stack creates its resources in the background: wait until they all exist
+                    if ok_st and (not snapshot or stack_settled(data)):
+                        break
+                    limit = STACK_SNAPSHOT_TIMEOUT if snapshot and ok_st else REPLAY_RETRY_SECONDS
+                    if time.time() - start > limit:
                         break
                     time.sleep(delay)
                     delay = min(delay * 2, 2)
                 if 200 <= st < 300:
                     ok += 1
-                    self.ids.learn(resp, data)
+                    if snapshot:
+                        self.ids.learn_stack(resp, data)
+                    else:
+                        self.ids.learn(resp, data)
                 else:
                     fail += 1
                     log(f"REPLAY FAILED #{seq} {name} {path}: HTTP {st} {data[:200]!r}")
@@ -371,6 +412,35 @@ class App:
         status, _, _, data = self.forward(*self.prepare(op, method, path, headers, body))
         return status, shims.on_response(self, op, status, data)
 
+    def snapshot_stack(self, path, headers, body):
+        """After a stack deploy, wait until its resources exist and journal their physical names (#19)."""
+        # shortcut: query (form) protocol only, which is what the SDKs and the CLI use for CloudFormation
+        stack = urllib.parse.parse_qs((body or b"").decode("utf-8", "replace")).get("StackName", [None])[0]
+        if not stack:
+            return
+        gen = self.generation
+        req = urllib.parse.urlencode({"Action": STACK_SNAPSHOT_OP, "StackName": stack,
+                                      "Version": "2010-05-15"}).encode()
+        headers = {k: v for k, v in headers.items() if k.lower() != "x-amz-target"}
+        headers = fix_body_headers(headers, req)
+        deadline = time.time() + STACK_SNAPSHOT_TIMEOUT
+        while not self.stopping and time.time() < deadline:
+            time.sleep(1)
+            with self.lock:
+                if gen != self.generation:
+                    return  # the emulator restarted: the replay of the deploy takes a new snapshot
+                status, _, _, data = self.forward(*self.prepare(STACK_SNAPSHOT_OP, "POST", path, headers, req))
+                if not 200 <= status < 300:
+                    return  # stack gone, or the emulator does not answer: nothing to translate
+                if stack_settled(data):
+                    with self.db() as db:
+                        db.execute("insert into journal(ts, op, method, path, headers, body, status, resp) "
+                                   "values(?,?,?,?,?,?,?,?)", (time.time(), STACK_SNAPSHOT_OP, "POST", path,
+                                                               json.dumps(headers), req, status,
+                                                               self.ids.to_client(data)))
+                    return
+        log(f"stack {stack} did not finish within {STACK_SNAPSHOT_TIMEOUT} s; its generated names are not saved")
+
     def handle(self, method, path, headers, body, client_gone=lambda: False):
         if path.startswith(dashboard.PREFIX):  # served by keepstack itself, never forwarded or journaled
             return dashboard.handle(self, method, path, headers)
@@ -409,6 +479,9 @@ class App:
                 with self.db() as db:
                     if seq and ok:
                         db.execute("update journal set status=?, resp=? where seq=?", (status, data, seq))
+                        if op in STACK_DEPLOY_OPS:
+                            threading.Thread(target=self.snapshot_stack, args=(path, headers, body),
+                                             daemon=True).start()
                     elif seq:
                         db.execute("delete from journal where seq=?", (seq,))
                     elif ok and b"ReceiptHandle" in data:  # ReceiveMessage that returned messages

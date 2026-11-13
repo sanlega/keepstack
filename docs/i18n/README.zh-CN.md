@@ -415,8 +415,8 @@ keepstack --version
 - **ID 转换基于启发式规则**：只有看起来像生成标识符的值才会被学习。
   详情参见[工作原理](../how-it-works.md#limitations)。
 - **journal 只增不减**，直到你运行 `keepstack compact`，它会删除已创建又被删除的资源。
-- **CloudFormation / CDK：** 堆栈会被持久化，但 CloudFormation 自动生成的物理名称（未设置 `QueueName`、`BucketName`
-  等的资源）在重启后会改变。请为你依赖的资源显式命名。
+- **CloudFormation / CDK：** 堆栈会被持久化，CloudFormation 自动生成的物理名称（未设置 `QueueName`、`BucketName`
+  等的资源）也会保留，但 keepstack 停止时仍在部署中的堆栈除外。
 
 </details>
 

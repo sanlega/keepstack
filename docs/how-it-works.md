@@ -126,8 +126,8 @@ abandoned write is an end-to-end test (`tests/test_e2e_crash.py`).
   again when the calls that caused them are replayed.
 - **In-memory bodies.** Requests and responses are buffered (no streaming). Tested with 20 MB multipart S3 uploads.
 - **The journal only grows** until `keepstack compact` drops the resources that were created and later deleted.
-- **CloudFormation-generated names.** Replaying `CreateStack` rebuilds every resource of the template and the stack
-  ID is translated, but physical names that CloudFormation generates (a queue without `QueueName` becomes
-  `stack-Q-C212895A2991`) only appear in read responses (`DescribeStackResources`), which are not journaled, so they
-  get new values after a restart. Give explicit names to resources you reference from outside the stack
-  ([#19](https://github.com/sanlega/keepstack/issues/19) tracks translating them).
+- **CloudFormation-generated names.** Physical names that CloudFormation generates (a queue without `QueueName`
+  becomes `stack-Q-C212895A2991`) only appear in read responses. After a stack deploy (`CreateStack`, `UpdateStack`,
+  `ExecuteChangeSet`) keepstack polls `DescribeStackResources` until the stack settles and journals that answer; the
+  replay waits for the replayed stack the same way and pairs old and new names by logical ID. Names are lost for a
+  stack that was still deploying when keepstack stopped, and only the query (form) protocol is handled.

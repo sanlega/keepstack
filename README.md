@@ -421,8 +421,8 @@ Run several isolated environments side by side with different `--port`, `--emula
   Details in [how it works](docs/how-it-works.md#limitations).
 - **The journal only grows** until you run `keepstack compact`, which drops resources that were created and
   deleted.
-- **CloudFormation / CDK:** stacks persist, but physical names that CloudFormation generates (resources without
-  `QueueName`, `BucketName`...) change after a restart. Name the resources you rely on.
+- **CloudFormation / CDK:** stacks persist, including the physical names CloudFormation generates (resources without
+  `QueueName`, `BucketName`...), except for a stack that was still deploying when keepstack stopped.
 
 </details>
 
