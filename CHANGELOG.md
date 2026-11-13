@@ -5,7 +5,10 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-11-13
+
 ### Fixed
+- The GitHub Action can be published in the GitHub Marketplace: its description is now under 125 characters.
 - `keepstack validate` reported services the emulator does not have (`404 UnknownService`, which recent emulator
   versions return instead of 501) as config errors; they are emulator gaps now and only warn unless `--strict`.
 - A write that waited while keepstack restored the emulator (or behind a slow write), and whose client gave up and
@@ -105,7 +108,8 @@ the environment of your default branch, with no AWS account.
 - Automatic build of the emulator image (x86_64 and arm64).
 - Compatibility matrix covering 40+ Terraform resource types.
 
-[Unreleased]: https://github.com/sanlega/keepstack/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/sanlega/keepstack/compare/v0.3.1...HEAD
+[0.3.1]: https://github.com/sanlega/keepstack/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/sanlega/keepstack/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/sanlega/keepstack/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/sanlega/keepstack/releases/tag/v0.1.0
